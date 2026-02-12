@@ -18,7 +18,9 @@ const LoginScreen = () => {
             const { error: loginError } = await login(email, password);
             if (loginError) throw loginError;
         } catch (err) {
-            setError('Credenciales inválidas. Por favor verifique su correo y contraseña.');
+            setError(err.message === 'Invalid login credentials'
+                ? 'Credenciales inválidas. Por favor verifique su correo y contraseña.'
+                : `Error: ${err.message}`);
         } finally {
             setLoading(false);
         }
