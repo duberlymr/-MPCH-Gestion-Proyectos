@@ -1227,15 +1227,16 @@ function App() {
       setIsLeadModalOpen(true);
       return;
     }
+    const { _action, ...cleanData } = projectData;
     try {
-      if (projectData.id) {
-        const { error } = await supabase.from('proyectos').update(projectData).eq('id', projectData.id);
+      if (cleanData.id) {
+        const { error } = await supabase.from('proyectos').update(cleanData).eq('id', cleanData.id);
         if (error) throw error;
       } else {
         const newProject = {
-          ...projectData,
+          ...cleanData,
           dossier: createEmptyDossier(),
-          presupuesto: projectData.presupuesto || { personal: 0, materiales: 0, servicios: 0, otros: 0 }
+          presupuesto: cleanData.presupuesto || { personal: 0, materiales: 0, servicios: 0, otros: 0 }
         };
         const { error } = await supabase.from('proyectos').insert(newProject);
         if (error) throw error;
@@ -1398,10 +1399,22 @@ function App() {
         return (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <KPICard title="Proyectos Totales" value={projects.length} change="+2" trend="up" icon={Layers} />
-              <KPICard title="Presupuesto Total" value="S/ 2.5M" change="+15%" trend="up" icon={BarChart3} />
-              <KPICard title="Hitos Pendientes" value="8" change="-3" trend="down" icon={Calendar} />
-              <KPICard title="Personal Activo" value={personnel.length} change="+4" trend="up" icon={Users} />
+              <KPICard title="Proyectos Totales" value={projects.length} change={projects.length > 0 ? `+${projects.length}` : "0"} trend="up" icon={Layers} />
+              <KPICard
+                title="Presupuesto Total"
+                value={`S/ ${(projects.reduce((acc, p) => acc + calculateProjectBudget(p.presupuesto), 0) / 1000000).toFixed(1)}M`}
+                change="+100%"
+                trend="up"
+                icon={BarChart3}
+              />
+              <KPICard
+                title="Hitos Totales"
+                value={projects.reduce((acc, p) => acc + (p.hitos?.length || 0), 0)}
+                change="Actualizado"
+                trend="up"
+                icon={Calendar}
+              />
+              <KPICard title="Personal Activo" value={personnel.length} change={personnel.length > 0 ? `+${personnel.length}` : "0"} trend="up" icon={Users} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">

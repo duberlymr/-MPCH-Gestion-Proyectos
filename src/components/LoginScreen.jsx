@@ -15,7 +15,7 @@ const LoginScreen = () => {
         setLoading(true);
 
         try {
-            const { error: loginError } = await login(email, password);
+            const { error: loginError } = await login(email.trim(), password);
             if (loginError) throw loginError;
         } catch (err) {
             setError(err.message === 'Invalid login credentials'
