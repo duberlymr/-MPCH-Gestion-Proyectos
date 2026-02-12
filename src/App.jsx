@@ -11,7 +11,11 @@ import {
   Plus,
   AlertTriangle,
   Trash2,
-  FileCheck
+  FileCheck,
+  Check,
+  Save,
+  X,
+  Edit2
 } from 'lucide-react';
 import GanttChart from './components/GanttChart';
 import { ProjectStateChart, BudgetVsActualChart } from './components/DashboardCharts';
@@ -350,6 +354,80 @@ const ProjectDetailModal = ({ project, isOpen, onClose, personnel, onSave }) => 
   );
 };
 
+const ObservationField = ({ initialValue, onSave }) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [text, setText] = React.useState(initialValue || '');
+
+  React.useEffect(() => {
+    setText(initialValue || '');
+  }, [initialValue]);
+
+  const handleSave = () => {
+    onSave(text);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setText(initialValue || '');
+    setIsEditing(false);
+  };
+
+  if (!isEditing) {
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-between items-center px-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estado u Observaciones</label>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-transparent border-none flex items-center gap-1 group/edit"
+          >
+            <Edit2 size={10} className="group-hover/edit:scale-110 transition-transform" /> Editar Texto
+          </button>
+        </div>
+        <div
+          onClick={() => setIsEditing(true)}
+          className="w-full p-4 bg-slate-50 border border-gray-100 rounded-2xl min-h-[100px] text-navy-800 text-xs font-medium whitespace-pre-wrap cursor-pointer hover:bg-slate-100 transition-colors"
+        >
+          {initialValue ? initialValue : <span className="text-slate-300 italic">Sin observaciones registradas. Haga clic para añadir...</span>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+      <div className="flex justify-between items-center px-1">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></div>
+          <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Modo Edición Activo</label>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCancel}
+            className="flex items-center gap-1 px-3 py-1 bg-red-50 text-red-500 rounded-lg text-[10px] font-bold hover:bg-red-100 transition-all border-none"
+          >
+            <X size={10} /> Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg text-[10px] font-bold hover:bg-green-700 transition-all shadow-md shadow-green-500/20 border-none"
+          >
+            <Save size={10} /> Guardar Cambios
+          </button>
+        </div>
+      </div>
+      <textarea
+        autoFocus
+        className="w-full p-4 bg-white border-2 border-blue-500 rounded-2xl outline-none transition-all font-medium text-navy-800 text-xs resize-none shadow-inner"
+        rows="4"
+        placeholder="Escriba aquí el estado actual..."
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+    </div>
+  );
+};
+
 const DossierProgress = ({ dossier, onUpdate, onSetFullDossier }) => {
   const [activeTab, setActiveTab] = React.useState(Object.keys(dossier)[0] || '1');
   const [isAddingSub, setIsAddingSub] = React.useState(null); // activity index
@@ -640,13 +718,9 @@ const DossierProgress = ({ dossier, onUpdate, onSetFullDossier }) => {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Estado u Observaciones</label>
-                        <textarea
-                          className="w-full p-4 bg-slate-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-navy-800 text-xs resize-none"
-                          rows="3"
-                          placeholder="Escriba aquí el estado actual o alguna observación..."
-                          value={sub.observations || ''}
-                          onChange={(e) => handleUpdateObservations(activeTab, sub.id, e.target.value)}
+                        <ObservationField
+                          initialValue={sub.observations}
+                          onSave={(newVal) => handleUpdateObservations(activeTab, sub.id, newVal)}
                         />
                       </div>
                     </div>
