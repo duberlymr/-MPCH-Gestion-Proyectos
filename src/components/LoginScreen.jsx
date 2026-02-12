@@ -101,7 +101,7 @@ const LoginScreen = () => {
                     {/* Footer */}
                     <div className="mt-10 pt-8 border-t border-white/5 text-center">
                         <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">
-                            © 2026 MUNICIPALIDAD PROVINCIAL DE CHICLAYO
+                            © 2026 MUNICIPALIDAD PROVINCIAL DE CHUMBIVILCAS
                         </p>
                     </div>
                 </div>
