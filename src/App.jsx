@@ -43,20 +43,23 @@ const createEmptyDossier = () => {
 };
 
 const calculateActivityProgress = (subActivities = []) => {
-  if (!subActivities || subActivities.length === 0) return 0;
-  const total = subActivities.reduce((acc, s) => acc + s.progress, 0);
-  return Math.round(total / subActivities.length);
+  const safeSubActivities = subActivities || [];
+  if (safeSubActivities.length === 0) return 0;
+  const total = safeSubActivities.reduce((acc, s) => acc + (s.progress || 0), 0);
+  return Math.round(total / safeSubActivities.length);
 };
 
 const calculateProjectDossierProgress = (dossier = {}) => {
-  const activities = Object.values(dossier);
+  const safeDossier = dossier || {};
+  const activities = Object.values(safeDossier);
   if (activities.length === 0) return 0;
-  const total = activities.reduce((acc, act) => acc + calculateActivityProgress(act.subActivities), 0);
+  const total = activities.reduce((acc, act) => acc + calculateActivityProgress(act?.subActivities), 0);
   return Math.round(total / activities.length);
 };
 
 const calculateProjectBudget = (presupuesto = {}) => {
-  return Object.values(presupuesto).reduce((acc, monto) => acc + (monto || 0), 0);
+  const safeBudget = presupuesto || {};
+  return Object.values(safeBudget).reduce((acc, monto) => acc + (parseFloat(monto) || 0), 0);
 };
 
 const calculateProjectDuration = (inicio, fin) => {
