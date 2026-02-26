@@ -1162,12 +1162,54 @@ const PersonalView = ({
                         {sinProyecto.length > 0 && (
                           <div>
                             <div className="flex items-center gap-2 mb-2">
-                              <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0"></div>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sin proyecto asignado</p>
+                              <div className="w-2 h-2 rounded-full bg-orange-300 shrink-0"></div>
+                              <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Sin proyecto asignado</p>
                               <span className="text-[9px] text-slate-400 shrink-0">({sinProyecto.length})</span>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4 border-l-2 border-slate-100">
-                              {sinProyecto.map(renderSubCard)}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4 border-l-2 border-orange-100">
+                              {sinProyecto.map(subId => {
+                                const sub = personnel.find(p => p.id === subId);
+                                if (!sub) return null;
+                                return (
+                                  <div key={subId} className="bg-white p-4 rounded-2xl border border-orange-100 shadow-sm group hover:border-orange-200 transition-all">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center font-bold text-xs uppercase">
+                                          {sub.nombre.split(' ').map(n => n[0]).join('')}
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-bold text-navy-800">{sub.nombre}</p>
+                                          <div className="flex items-center gap-2">
+                                            <p className="text-[10px] text-slate-400 font-medium">{sub.rol}</p>
+                                            {sub.telefono && <span className="text-[9px] text-slate-300">• {sub.telefono}</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={() => onAssignSubordinate(lead.id, subId)}
+                                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border-none bg-transparent opacity-0 group-hover:opacity-100"
+                                        title="Desvincular del equipo"
+                                      >
+                                        <Plus size={12} className="rotate-45" />
+                                      </button>
+                                    </div>
+                                    <select
+                                      className="w-full text-[10px] bg-orange-50 border border-orange-200 rounded-lg px-2 py-1.5 text-orange-700 font-bold outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer"
+                                      onChange={(e) => {
+                                        if (e.target.value) {
+                                          onAssignProject(sub.id, e.target.value);
+                                          e.target.value = '';
+                                        }
+                                      }}
+                                    >
+                                      <option value="">Asignar a proyecto...</option>
+                                      {leadProjects.map(pn => (
+                                        <option key={pn} value={pn}>{pn}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
