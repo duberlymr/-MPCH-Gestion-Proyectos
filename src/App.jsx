@@ -89,8 +89,6 @@ const Sidebar = ({ collapsed, setCollapsed, currentView, setCurrentView }) => {
     { id: 'personal', icon: Users, label: 'Personal' },
     { id: 'expedientes', icon: FileCheck, label: 'Avance de Expediente' },
     { id: 'cronograma', icon: Calendar, label: 'Cronograma' },
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'reportes', icon: BarChart3, label: 'Reportes' },
   ];
 
   return (
