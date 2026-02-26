@@ -15,13 +15,8 @@ import {
   Check,
   Save,
   X,
-  Edit2,
-  TrendingUp
+  Edit2
 } from 'lucide-react';
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
 import GanttChart from './components/GanttChart';
 import { ProjectStateChart, BudgetVsActualChart } from './components/DashboardCharts';
 import ProjectForm from './components/ProjectForm';
@@ -94,7 +89,6 @@ const Sidebar = ({ collapsed, setCollapsed, currentView, setCurrentView }) => {
     { id: 'personal', icon: Users, label: 'Personal' },
     { id: 'expedientes', icon: FileCheck, label: 'Avance de Expediente' },
     { id: 'cronograma', icon: Calendar, label: 'Cronograma' },
-    { id: 'curva-s', icon: TrendingUp, label: 'Prueba Cronograma' },
   ];
 
   return (
@@ -1607,234 +1601,6 @@ function App() {
     }
   };
 
-  const handleSaveCurvaS = async (projectId, curvaSData) => {
-    try {
-      const { error } = await supabase.from('proyectos').update({ cronograma_costos: curvaSData }).eq('id', projectId);
-      if (error) throw error;
-      fetchData(true);
-    } catch (err) {
-      console.error("Error al guardar curva S:", err);
-    }
-  };
-
-  // ── CURVA S ──────────────────────────────────────────────────────────────
-  const CurvaSView = ({ projects, onSave }) => {
-    const [selectedProjectId, setSelectedProjectId] = React.useState(projects[0]?.id || null);
-    const selectedProject = projects.find(p => p.id === selectedProjectId);
-    const periodos = selectedProject?.cronograma_costos || [];
-
-    const [editingIdx, setEditingIdx] = React.useState(null);
-    const [editVal, setEditVal] = React.useState({ programado: '', ejecutado: '' });
-    const [newRow, setNewRow] = React.useState({ periodo: '', programado: '', ejecutado: '' });
-    const [showAddRow, setShowAddRow] = React.useState(false);
-
-    const handleSaveEdit = () => {
-      const updated = periodos.map((p, i) =>
-        i === editingIdx
-          ? { ...p, programado: parseFloat(editVal.programado) || 0, ejecutado: editVal.ejecutado !== '' ? parseFloat(editVal.ejecutado) : null }
-          : p
-      );
-      onSave(selectedProjectId, updated);
-      setEditingIdx(null);
-    };
-
-    const handleAddRow = () => {
-      if (!newRow.periodo) return;
-      const updated = [...periodos, {
-        periodo: newRow.periodo,
-        programado: parseFloat(newRow.programado) || 0,
-        ejecutado: newRow.ejecutado !== '' ? parseFloat(newRow.ejecutado) : null
-      }];
-      onSave(selectedProjectId, updated);
-      setNewRow({ periodo: '', programado: '', ejecutado: '' });
-      setShowAddRow(false);
-    };
-
-    const handleDeleteRow = (idx) => {
-      const updated = periodos.filter((_, i) => i !== idx);
-      onSave(selectedProjectId, updated);
-    };
-
-    // Datos para la gráfica: valores mensuales + acumulados (Curva S)
-    let acumProg = 0;
-    let acumEjec = 0;
-    const chartData = periodos.map((p) => {
-      acumProg += p.programado || 0;
-      acumEjec += p.ejecutado != null ? p.ejecutado : 0;
-      return {
-        periodo: p.periodo,
-        'Prog. Mes': p.programado || 0,
-        'Ejec. Mes': p.ejecutado != null ? p.ejecutado : undefined,
-        'Acum. Prog.': acumProg,
-        'Acum. Ejec.': p.ejecutado != null ? acumEjec : undefined,
-      };
-    });
-
-    const totalProg = periodos.reduce((s, p) => s + (p.programado || 0), 0);
-    const totalEjec = periodos.reduce((s, p) => s + (p.ejecutado != null ? p.ejecutado : 0), 0);
-    const avance = totalProg > 0 ? ((totalEjec / totalProg) * 100).toFixed(1) : 0;
-
-    return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        {/* Header */}
-        <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-3">
-            <TrendingUp size={22} className="text-blue-600" />
-            <div>
-              <h3 className="text-xl font-bold text-navy-800">Curva S — Plan vs. Ejecutado</h3>
-              <p className="text-slate-400 text-xs">Seguimiento presupuestal por periodo</p>
-            </div>
-          </div>
-          <select
-            className="p-3 bg-slate-50 border border-gray-100 rounded-xl text-sm font-bold text-navy-800 outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
-            value={selectedProjectId || ''}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-          >
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>{p.nombre}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* KPIs */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Programado</p>
-            <p className="text-2xl font-bold text-navy-800">S/ {totalProg.toLocaleString('es-PE')}</p>
-          </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Ejecutado</p>
-            <p className="text-2xl font-bold text-blue-600">S/ {totalEjec.toLocaleString('es-PE')}</p>
-          </div>
-          <div className={`p-5 rounded-2xl border shadow-sm ${parseFloat(avance) >= 100 ? 'bg-green-50 border-green-200' : parseFloat(avance) >= 60 ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'}`}>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Avance de Ejecución</p>
-            <p className={`text-2xl font-bold ${parseFloat(avance) >= 100 ? 'text-green-600' : parseFloat(avance) >= 60 ? 'text-blue-600' : 'text-orange-500'}`}>{avance}%</p>
-          </div>
-        </div>
-
-        {/* Gráfica Curva S */}
-        {chartData.length > 0 && (
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <h4 className="text-sm font-bold text-navy-800 mb-4">Curva S — Acumulado Programado vs Ejecutado</h4>
-            <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="periodo" tick={{ fontSize: 10, fontWeight: 600 }} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `S/${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value) => `S/ ${value?.toLocaleString('es-PE')}`} />
-                <Legend wrapperStyle={{ fontSize: 11, fontWeight: 600 }} />
-                <Bar dataKey="Prog. Mes" fill="#e0e7ff" radius={[4,4,0,0]} />
-                <Bar dataKey="Ejec. Mes" fill="#93c5fd" radius={[4,4,0,0]} />
-                <Line type="monotone" dataKey="Acum. Prog." stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4 }} strokeDasharray="6 3" />
-                <Line type="monotone" dataKey="Acum. Ejec." stroke="#0ea5e9" strokeWidth={2.5} dot={{ r: 4 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {/* Tabla de periodos */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex justify-between items-center p-5 border-b border-gray-50">
-            <h4 className="text-sm font-bold text-navy-800">Detalle por Periodo</h4>
-            <button
-              onClick={() => setShowAddRow(true)}
-              className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors border-none"
-            >
-              <Plus size={13} /> Agregar Periodo
-            </button>
-          </div>
-
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50">
-                <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Periodo</th>
-                <th className="text-right px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Programado</th>
-                <th className="text-right px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ejecutado</th>
-                <th className="text-right px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Diferencia</th>
-                <th className="text-center px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estado</th>
-                <th className="px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {periodos.map((p, i) => {
-                const ejec = p.ejecutado != null ? p.ejecutado : null;
-                const diff = ejec != null ? ejec - p.programado : null;
-                const estado = ejec == null ? '⚪ Pendiente' : diff > 0 ? '🔴 Sobre' : diff < -p.programado * 0.1 ? '🟡 Bajo' : '🟢 OK';
-                return (
-                  <tr key={i} className="border-t border-gray-50 hover:bg-slate-50 transition-colors">
-                    {editingIdx === i ? (
-                      <>
-                        <td className="px-5 py-3 font-bold text-navy-800">{p.periodo}</td>
-                        <td className="px-5 py-3 text-right">
-                          <input type="number" className="w-28 text-right border border-blue-200 rounded-lg p-1 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400" value={editVal.programado} onChange={(e) => setEditVal({ ...editVal, programado: e.target.value })} />
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <input type="number" className="w-28 text-right border border-blue-200 rounded-lg p-1 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400" placeholder="—" value={editVal.ejecutado} onChange={(e) => setEditVal({ ...editVal, ejecutado: e.target.value })} />
-                        </td>
-                        <td colSpan={2}></td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={handleSaveEdit} className="p-1.5 bg-blue-600 text-white rounded-lg border-none hover:bg-blue-700"><Check size={12} /></button>
-                            <button onClick={() => setEditingIdx(null)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg border-none hover:bg-slate-200"><X size={12} /></button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="px-5 py-3 font-bold text-navy-800">{p.periodo}</td>
-                        <td className="px-5 py-3 text-right font-bold text-navy-800">S/ {(p.programado || 0).toLocaleString('es-PE')}</td>
-                        <td className="px-5 py-3 text-right font-bold text-blue-600">{ejec != null ? `S/ ${ejec.toLocaleString('es-PE')}` : <span className="text-slate-300">—</span>}</td>
-                        <td className="px-5 py-3 text-right font-bold">{diff != null ? <span className={diff > 0 ? 'text-red-500' : 'text-green-600'}>{diff > 0 ? '+' : ''}S/ {diff.toLocaleString('es-PE')}</span> : <span className="text-slate-300">—</span>}</td>
-                        <td className="px-5 py-3 text-center text-xs">{estado}</td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => { setEditingIdx(i); setEditVal({ programado: p.programado, ejecutado: p.ejecutado ?? '' }); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg border-none bg-transparent transition-colors"><Edit2 size={12} /></button>
-                            <button onClick={() => handleDeleteRow(i)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg border-none bg-transparent transition-colors"><Trash2 size={12} /></button>
-                          </div>
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
-
-              {/* Fila para agregar nuevo periodo */}
-              {showAddRow && (
-                <tr className="border-t border-blue-100 bg-blue-50">
-                  <td className="px-5 py-3">
-                    <input className="w-full border border-blue-200 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400 bg-white" placeholder="Ej. Enero 2025" value={newRow.periodo} onChange={(e) => setNewRow({ ...newRow, periodo: e.target.value })} />
-                  </td>
-                  <td className="px-5 py-3">
-                    <input type="number" className="w-full text-right border border-blue-200 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400 bg-white" placeholder="0" value={newRow.programado} onChange={(e) => setNewRow({ ...newRow, programado: e.target.value })} />
-                  </td>
-                  <td className="px-5 py-3">
-                    <input type="number" className="w-full text-right border border-blue-200 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400 bg-white" placeholder="— (opcional)" value={newRow.ejecutado} onChange={(e) => setNewRow({ ...newRow, ejecutado: e.target.value })} />
-                  </td>
-                  <td colSpan={2}></td>
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={handleAddRow} className="p-1.5 bg-blue-600 text-white rounded-lg border-none hover:bg-blue-700"><Check size={12} /></button>
-                      <button onClick={() => setShowAddRow(false)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg border-none hover:bg-slate-200"><X size={12} /></button>
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {periodos.length === 0 && !showAddRow && (
-                <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400 text-xs">
-                    No hay periodos registrados. Haz clic en "Agregar Periodo" para comenzar.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-  // ── FIN CURVA S ───────────────────────────────────────────────────────────
-
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
@@ -1951,13 +1717,6 @@ function App() {
             <h3 className="text-xl font-bold text-navy-800 mb-8">Cronograma Maestro de la Oficina</h3>
             <GanttChart projects={projects} />
           </div>
-        );
-      case 'curva-s':
-        return (
-          <CurvaSView
-            projects={projects}
-            onSave={handleSaveCurvaS}
-          />
         );
       case 'reportes':
         return (
