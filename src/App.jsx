@@ -1074,8 +1074,20 @@ const PersonalView = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(lead.subordinados || []).map(subId => {
+                {(() => {
+                  const leadProjects = lead.proyectos || [];
+                  const subIds = lead.subordinados || [];
+
+                  if (subIds.length === 0) {
+                    return (
+                      <div className="py-12 bg-slate-50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center">
+                        <Users className="text-slate-300 mb-2" size={32} />
+                        <p className="text-xs text-slate-400 font-medium">Sin equipo asignado bajo esta jefatura</p>
+                      </div>
+                    );
+                  }
+
+                  const renderSubCard = (subId) => {
                     const sub = personnel.find(p => p.id === subId);
                     if (!sub) return null;
                     return (
@@ -1111,14 +1123,65 @@ const PersonalView = ({
                         </div>
                       </div>
                     );
-                  })}
-                  {(!lead.subordinados || lead.subordinados.length === 0) && (
-                    <div className="col-span-full py-12 bg-slate-50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center">
-                      <Users className="text-slate-300 mb-2" size={32} />
-                      <p className="text-xs text-slate-400 font-medium">Sin equipo asignado bajo esta jefatura</p>
+                  };
+
+                  // Si el jefe tiene 2+ proyectos, agrupa el equipo por proyecto
+                  if (leadProjects.length >= 2) {
+                    const grouped = leadProjects.map(projectName => ({
+                      projectName,
+                      subs: subIds.filter(subId => {
+                        const sub = personnel.find(p => p.id === subId);
+                        return sub && (sub.proyectos || []).includes(projectName);
+                      })
+                    }));
+                    const sinProyecto = subIds.filter(subId => {
+                      const sub = personnel.find(p => p.id === subId);
+                      return sub && !leadProjects.some(pn => (sub.proyectos || []).includes(pn));
+                    });
+
+                    return (
+                      <div className="space-y-5">
+                        {grouped.map(({ projectName, subs: groupSubs }) => (
+                          <div key={projectName}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>
+                              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider truncate" title={projectName}>{projectName}</p>
+                              <span className="text-[9px] text-slate-400 shrink-0">({groupSubs.length})</span>
+                            </div>
+                            {groupSubs.length > 0 ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4 border-l-2 border-blue-100">
+                                {groupSubs.map(renderSubCard)}
+                              </div>
+                            ) : (
+                              <div className="pl-4 border-l-2 border-slate-100 py-2">
+                                <p className="text-[10px] text-slate-400 italic">Sin personal asignado a este proyecto</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {sinProyecto.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0"></div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sin proyecto asignado</p>
+                              <span className="text-[9px] text-slate-400 shrink-0">({sinProyecto.length})</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4 border-l-2 border-slate-100">
+                              {sinProyecto.map(renderSubCard)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Vista plana para 0 o 1 proyecto
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {subIds.map(renderSubCard)}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
