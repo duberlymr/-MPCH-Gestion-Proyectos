@@ -755,7 +755,7 @@ const DossierProgress = ({ dossier, onUpdate, onSetFullDossier }) => {
 };
 
 const PersonnelModal = ({ isOpen, onClose, onSave, leadId, type = 'team' }) => {
-  const [formData, setFormData] = React.useState({ nombre: '', rol: '', rolPersonalizado: '', telefono: '' });
+  const [formData, setFormData] = React.useState({ nombre: '', rol: '', rolPersonalizado: '', telefono: '', remuneracion: '' });
 
   React.useEffect(() => {
     if (isOpen) {
@@ -763,7 +763,8 @@ const PersonnelModal = ({ isOpen, onClose, onSave, leadId, type = 'team' }) => {
         nombre: '',
         rol: type === 'lead' ? 'Proyectista I' : '',
         rolPersonalizado: '',
-        telefono: ''
+        telefono: '',
+        remuneracion: ''
       });
     }
   }, [isOpen, type]);
@@ -774,8 +775,8 @@ const PersonnelModal = ({ isOpen, onClose, onSave, leadId, type = 'team' }) => {
 
   const handleSave = () => {
     const finalRol = isLead ? formData.rol : (formData.rol === 'Otro' ? formData.rolPersonalizado : formData.rol);
-    onSave({ nombre: formData.nombre, rol: finalRol, telefono: formData.telefono, proyectos: [], subordinados: [] }, leadId);
-    setFormData({ nombre: '', rol: isLead ? 'Proyectista I' : '', rolPersonalizado: '', telefono: '' });
+    onSave({ nombre: formData.nombre, rol: finalRol, telefono: formData.telefono, remuneracion: parseFloat(formData.remuneracion) || 0, proyectos: [], subordinados: [] }, leadId);
+    setFormData({ nombre: '', rol: isLead ? 'Proyectista I' : '', rolPersonalizado: '', telefono: '', remuneracion: '' });
     onClose();
   };
 
@@ -845,6 +846,22 @@ const PersonnelModal = ({ isOpen, onClose, onSave, leadId, type = 'team' }) => {
               />
             </div>
           )}
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Remuneración Mensual (S/)</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">S/</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="w-full pl-10 pr-4 py-4 bg-slate-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-navy-800 placeholder:text-slate-300"
+                placeholder="0.00"
+                value={formData.remuneracion}
+                onChange={(e) => setFormData({ ...formData, remuneracion: e.target.value })}
+              />
+            </div>
+          </div>
 
           <div className="flex gap-3 pt-4">
             <button
@@ -1098,10 +1115,13 @@ const PersonalView = ({
                           </div>
                           <div>
                             <p className="text-sm font-bold text-navy-800">{sub.nombre}</p>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-[10px] text-slate-400 font-medium">{sub.rol}</p>
                               {sub.telefono && (
                                 <span className="text-[9px] text-slate-300">• {sub.telefono}</span>
+                              )}
+                              {sub.remuneracion > 0 && (
+                                <span className="text-[9px] text-green-600 font-bold">• S/ {sub.remuneracion.toLocaleString('es-PE')}</span>
                               )}
                             </div>
                           </div>
