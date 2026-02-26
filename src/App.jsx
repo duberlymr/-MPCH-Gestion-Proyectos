@@ -1278,7 +1278,7 @@ function App() {
   const [collapsed, setCollapsed] = React.useState(false);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState(null);
-  const [currentView, setCurrentView] = React.useState('dashboard');
+  const [currentView, setCurrentView] = React.useState('proyectos');
   const [isLeadModalOpen, setIsLeadModalOpen] = React.useState(false);
 
   // Data State
