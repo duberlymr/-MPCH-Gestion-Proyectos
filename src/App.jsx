@@ -1286,8 +1286,8 @@ function App() {
   const [personnel, setPersonnel] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const { data: projectsData, error: pError } = await supabase.from('proyectos').select('*');
       const { data: personnelData, error: perError } = await supabase.from('personal').select('*');
@@ -1297,7 +1297,7 @@ function App() {
     } catch (err) {
       console.error("Error al cargar datos:", err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -1324,7 +1324,7 @@ function App() {
         const { error } = await supabase.from('proyectos').insert(newProject);
         if (error) throw error;
       }
-      fetchData();
+      fetchData(true);
       setIsFormOpen(false);
     } catch (err) {
       console.error("Error al guardar proyecto:", err);
@@ -1336,7 +1336,7 @@ function App() {
       try {
         const { error } = await supabase.from('proyectos').delete().eq('id', id);
         if (error) throw error;
-        fetchData();
+        fetchData(true);
         if (selectedProject?.id === id) setSelectedProject(null);
       } catch (err) {
         console.error("Error al eliminar proyecto:", err);
@@ -1365,7 +1365,7 @@ function App() {
 
       if (leadError) throw leadError;
 
-      fetchData();
+      fetchData(true);
     } catch (err) {
       console.error("Error al crear subordinado:", err);
     }
@@ -1375,7 +1375,7 @@ function App() {
     try {
       const { error } = await supabase.from('personal').insert(personData);
       if (error) throw error;
-      fetchData();
+      fetchData(true);
     } catch (err) {
       console.error("Error al añadir personal:", err);
     }
@@ -1386,7 +1386,7 @@ function App() {
       try {
         const { error } = await supabase.from('personal').delete().eq('id', id);
         if (error) throw error;
-        fetchData();
+        fetchData(true);
       } catch (err) {
         console.error("Error al eliminar personal:", err);
       }
@@ -1399,7 +1399,7 @@ function App() {
       try {
         const { error } = await supabase.from('personal').update({ nombre: newNombre }).eq('id', person.id);
         if (error) throw error;
-        fetchData();
+        fetchData(true);
       } catch (err) {
         console.error("Error al editar personal:", err);
       }
@@ -1423,7 +1423,7 @@ function App() {
     try {
       const { error } = await supabase.from('personal').update({ proyectos: updatedProjects }).eq('id', personId);
       if (error) throw error;
-      fetchData();
+      fetchData(true);
     } catch (err) {
       console.error("Error al asignar proyecto:", err);
     }
@@ -1443,7 +1443,7 @@ function App() {
     try {
       const { error } = await supabase.from('personal').update({ subordinados: updatedSubs }).eq('id', bossId);
       if (error) throw error;
-      fetchData();
+      fetchData(true);
     } catch (err) {
       console.error("Error al asignar subordinado:", err);
     }
@@ -1460,7 +1460,7 @@ function App() {
     try {
       const { error } = await supabase.from('proyectos').update({ dossier: newDossier }).eq('id', projectId);
       if (error) throw error;
-      fetchData();
+      fetchData(true);
     } catch (err) {
       console.error("Error al actualizar dossier:", err);
     }
@@ -1470,7 +1470,7 @@ function App() {
     try {
       const { error } = await supabase.from('proyectos').update({ dossier: newDossier }).eq('id', projectId);
       if (error) throw error;
-      fetchData();
+      fetchData(true);
     } catch (err) {
       console.error("Error al guardar dossier completo:", err);
     }
