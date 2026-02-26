@@ -433,6 +433,12 @@ const DossierProgress = ({ dossier, onUpdate, onSetFullDossier }) => {
   const [isEditingActivity, setIsEditingActivity] = React.useState(null); // { index, name }
   const [isAddingActivity, setIsAddingActivity] = React.useState(false);
   const [newActivityName, setNewActivityName] = React.useState('');
+  const [localProgress, setLocalProgress] = React.useState({});
+
+  // Clear local progress when dossier syncs from DB
+  React.useEffect(() => {
+    setLocalProgress({});
+  }, [dossier]);
 
   const handleAddSub = (activityIndex) => {
     if (!newSub.name) return;
@@ -698,19 +704,21 @@ const DossierProgress = ({ dossier, onUpdate, onSetFullDossier }) => {
                           <div className="flex-1">
                             <div className="flex justify-between text-[10px] mb-2 font-bold text-slate-400">
                               <span>Progreso</span>
-                              <span>{sub.progress}%</span>
+                              <span>{localProgress[`${activeTab}-${sub.id}`] ?? sub.progress}%</span>
                             </div>
                             <input
                               type="range"
                               min="0"
                               max="100"
-                              value={sub.progress}
-                              onChange={(e) => handleUpdateProgress(activeTab, sub.id, e.target.value)}
+                              value={localProgress[`${activeTab}-${sub.id}`] ?? sub.progress}
+                              onChange={(e) => setLocalProgress(prev => ({ ...prev, [`${activeTab}-${sub.id}`]: parseInt(e.target.value) }))}
+                              onMouseUp={(e) => handleUpdateProgress(activeTab, sub.id, e.target.value)}
+                              onTouchEnd={(e) => handleUpdateProgress(activeTab, sub.id, e.target.value)}
                               className="w-full h-1.5 bg-slate-100 rounded-full appearance-none cursor-pointer accent-blue-600"
                             />
                           </div>
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xs border ${sub.progress === 100 ? 'bg-green-50 border-green-100 text-green-600' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
-                            {sub.progress}%
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xs border ${(localProgress[`${activeTab}-${sub.id}`] ?? sub.progress) === 100 ? 'bg-green-50 border-green-100 text-green-600' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
+                            {localProgress[`${activeTab}-${sub.id}`] ?? sub.progress}%
                           </div>
                         </div>
                       </div>
