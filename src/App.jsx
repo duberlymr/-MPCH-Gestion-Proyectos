@@ -1533,7 +1533,11 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
 
       <div className="space-y-10">
         {projects.map((project) => {
-          const meses = getMesesProyecto(project.inicio, project.fin);
+          let meses = getMesesProyecto(project.inicio, project.fin);
+          if (meses.length === 0) {
+            const y = new Date().getFullYear();
+            meses = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+          }
           const materiales = getMats(project.id);
           const totalAsignado = materiales.reduce((s, m) => s + (m.costo || 0), 0);
           const presupuestoMat = project.presupuesto?.materiales || 0;
@@ -1589,12 +1593,7 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
 
                 {/* Derecha: secciones por mes */}
                 <div className="lg:col-span-3 space-y-4">
-                  {meses.length === 0 ? (
-                    <div className="py-12 bg-slate-50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center">
-                      <Package className="text-slate-300 mb-2" size={32} />
-                      <p className="text-xs text-slate-400 font-medium">El proyecto no tiene fechas definidas</p>
-                    </div>
-                  ) : meses.map((mes) => {
+                  {meses.map((mes) => {
                     const mesMats = materiales.filter(m => m.mes === mes);
                     const mesTotal = mesMats.reduce((s, m) => s + (m.costo || 0), 0);
                     const isAdding = addingState?.projectId === project.id && addingState?.mes === mes;
