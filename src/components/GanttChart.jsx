@@ -113,10 +113,13 @@ const GanttChart = ({ projects }) => {
                                                 width: `${width}%`
                                             }}
                                         >
-                                            <span className="text-[9px] font-bold text-white whitespace-nowrap">
+                                            <span className="text-[10px] font-bold text-white whitespace-nowrap">
                                                 {format(projectStart, 'dd/MM/yyyy')}
                                             </span>
-                                            <span className="text-[9px] font-bold text-white whitespace-nowrap ml-auto">
+                                            <span className="text-[10px] font-bold text-white/90 whitespace-nowrap">
+                                                {differenceInDays(projectEnd, projectStart) + 1} días
+                                            </span>
+                                            <span className="text-[10px] font-bold text-white whitespace-nowrap">
                                                 {format(projectEnd, 'dd/MM/yyyy')}
                                             </span>
                                         </div>
