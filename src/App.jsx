@@ -88,7 +88,7 @@ const Sidebar = ({ collapsed, setCollapsed, currentView, setCurrentView }) => {
   const menuItems = [
     { id: 'proyectos', icon: Layers, label: 'Proyectos' },
     { id: 'personal', icon: Users, label: 'Personal' },
-    { id: 'materiales', icon: Package, label: 'Ficha Materiales' },
+    { id: 'materiales', icon: Package, label: 'Materiales' },
     { id: 'expedientes', icon: FileCheck, label: 'Avance de Expediente' },
     { id: 'cronograma', icon: Calendar, label: 'Cronograma' },
   ];
@@ -1526,10 +1526,6 @@ const MaterialesView = ({ projects, onSave }) => {
                         <div>
                           <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-1">Periodo</p>
                           <p className="text-[10px] text-white/70">{project.inicio || '—'} → {project.fin || '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-1">Presupuesto Materiales</p>
-                          <p className="text-xl font-bold">S/ {presupuestoMat.toLocaleString('es-PE')}</p>
                         </div>
                         <div className="bg-white/5 rounded-xl p-3 border border-white/10">
                           <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-1">Total Asignado</p>
