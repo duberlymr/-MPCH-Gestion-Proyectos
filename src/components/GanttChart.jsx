@@ -104,7 +104,7 @@ const GanttChart = ({ projects }) => {
                                 <div className="flex-1 h-9 bg-slate-50/50 rounded-xl relative border border-gray-50 overflow-hidden">
                                     {width > 0 && (
                                         <div
-                                            className={`absolute h-full flex items-center px-4 transition-all duration-700 ease-out group-hover:brightness-110 shadow-sm
+                                            className={`absolute h-full flex items-center justify-between px-3 transition-all duration-700 ease-out group-hover:brightness-110 shadow-sm
                         ${project.estado === 'Finalizado' ? 'bg-gradient-to-r from-green-400 to-green-500' :
                                                     project.estado === 'Detenido' ? 'bg-gradient-to-r from-red-400 to-red-500' :
                                                         'bg-gradient-to-r from-blue-500 to-indigo-600'}`}
@@ -113,8 +113,11 @@ const GanttChart = ({ projects }) => {
                                                 width: `${width}%`
                                             }}
                                         >
-                                            <span className="text-[9px] font-bold text-white whitespace-nowrap overflow-hidden">
-                                                {differenceInDays(projectEnd, projectStart) + 1} días
+                                            <span className="text-[9px] font-bold text-white whitespace-nowrap">
+                                                {format(projectStart, 'dd/MM/yyyy')}
+                                            </span>
+                                            <span className="text-[9px] font-bold text-white whitespace-nowrap ml-auto">
+                                                {format(projectEnd, 'dd/MM/yyyy')}
                                             </span>
                                         </div>
                                     )}
