@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import GanttChart from './components/GanttChart';
 import { ProjectStateChart, BudgetVsActualChart } from './components/DashboardCharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import ProjectForm from './components/ProjectForm';
 import { supabase } from './lib/supabase';
 import { useAuth } from './contexts/AuthContext';
@@ -1744,22 +1745,72 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
 // ── CronogramaView ────────────────────────────────────────────────────────
 const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
   const [selectedProjectId, setSelectedProjectId] = React.useState(projects[0]?.id || null);
-  const [localEjec, setLocalEjec] = React.useState({}); // { [mes]: { personal, bienes, servicios } }
+  const [localEjec, setLocalEjec] = React.useState({});
 
   React.useEffect(() => {
     if (!selectedProjectId && projects.length > 0) setSelectedProjectId(projects[0].id);
   }, [projects]);
 
-  // Reset local ejecutado when project changes
   React.useEffect(() => { setLocalEjec({}); }, [selectedProjectId]);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
 
-  let meses = selectedProject ? getMesesProyecto(selectedProject.inicio, selectedProject.fin) : [];
-  if (meses.length === 0 && selectedProject) {
-    const y = new Date().getFullYear();
-    meses = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+  // ── Inline date helpers (no extra imports) ──────────────────────────────
+  const soM = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+  const eoM = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  const diffD = (a, b) => Math.round((b - a) / 86400000);
+  const parseDateStr = (str) => { if (!str) return null; const d = new Date(str + 'T00:00:00'); return isNaN(d) ? null : d; };
+
+  const pStart = selectedProject ? parseDateStr(selectedProject.inicio) : null;
+  const pEnd   = selectedProject ? parseDateStr(selectedProject.fin)    : null;
+
+  const now = new Date();
+  let viewStart = pStart && pEnd ? soM(pStart) : new Date(now.getFullYear(), 0, 1);
+  let viewEnd   = pStart && pEnd ? eoM(pEnd)   : new Date(now.getFullYear(), 11, 31);
+  const totalDays = diffD(viewStart, viewEnd) + 1;
+
+  // Build month list (Date objects, first day of each month in range)
+  const viewMonths = [];
+  let cur = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
+  while (cur <= viewEnd) { viewMonths.push(new Date(cur)); cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1); }
+
+  const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  // Proportional width (%) for each month column — same for Gantt + table
+  const monthColWidths = viewMonths.map((m, i) => {
+    const mS = i === 0 ? viewStart : soM(m);
+    const mE = i === viewMonths.length - 1 ? viewEnd : eoM(m);
+    return ((diffD(mS, mE) + 1) / totalDays) * 100;
+  });
+
+  // Build week list for Gantt sub-header
+  const viewWeeks = [];
+  const dow0 = (d) => { const dow = d.getDay() === 0 ? 6 : d.getDay() - 1; return new Date(d.getTime() - dow * 86400000); };
+  let wCur = dow0(new Date(viewStart));
+  while (wCur <= viewEnd) { viewWeeks.push(new Date(wCur)); wCur = new Date(wCur.getTime() + 7 * 86400000); }
+  const weekColWidths = viewWeeks.map((w, i) => {
+    const wS = i === 0 ? viewStart : (w < viewStart ? viewStart : w);
+    const wE0 = new Date(w.getTime() + 6 * 86400000);
+    const wE = i === viewWeeks.length - 1 ? viewEnd : (wE0 > viewEnd ? viewEnd : wE0);
+    return ((diffD(wS, wE) + 1) / totalDays) * 100;
+  });
+  const getWeekNum = (d) => {
+    const u = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    u.setUTCDate(u.getUTCDate() + 4 - (u.getUTCDay() || 7));
+    return Math.ceil((((u - new Date(Date.UTC(u.getUTCFullYear(), 0, 1))) / 86400000) + 1) / 7);
+  };
+
+  // Gantt bar position within flex-1 area
+  let barLeft = 0, barWidth = 0;
+  if (pStart && pEnd) {
+    barLeft  = Math.max(0, (diffD(viewStart, pStart) / totalDays) * 100);
+    barWidth = Math.min(100 - barLeft, ((diffD(pStart, pEnd) + 1) / totalDays) * 100);
   }
+  const fmtDate = (d) => d ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` : '';
+
+  // meses as "YYYY-MM" strings aligned with viewMonths
+  const meses = viewMonths.map(m => `${m.getFullYear()}-${String(m.getMonth()+1).padStart(2,'0')}`);
+  const fmtMesLabel = (mesStr) => { const [y, mo] = mesStr.split('-').map(Number); return `${MONTH_NAMES_ES[mo-1].slice(0,3)} ${y}`; };
 
   // ── Programado ──────────────────────────────────────────────────────────
   const costosPorMes = meses.map(mes => {
@@ -1796,14 +1847,9 @@ const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
     if (localEjec[mes]?.[cat] !== undefined) return localEjec[mes][cat];
     return selectedProject?.costos_ejecutados?.[mes]?.[cat] ?? '';
   };
-
   const handleEjecChange = (mes, cat, value) => {
-    setLocalEjec(prev => ({
-      ...prev,
-      [mes]: { ...(prev[mes] || {}), [cat]: value }
-    }));
+    setLocalEjec(prev => ({ ...prev, [mes]: { ...(prev[mes] || {}), [cat]: value } }));
   };
-
   const handleEjecBlur = (mes, cat) => {
     if (!selectedProject) return;
     const existing = selectedProject.costos_ejecutados || {};
@@ -1812,10 +1858,8 @@ const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
       bienes:    parseFloat(getEjec(mes, 'bienes'))    || 0,
       servicios: parseFloat(getEjec(mes, 'servicios')) || 0,
     };
-    // update with the latest change
     mesData[cat] = parseFloat(localEjec[mes]?.[cat]) || 0;
-    const merged = { ...existing, [mes]: mesData };
-    if (onSaveEjecutado) onSaveEjecutado(selectedProjectId, merged);
+    if (onSaveEjecutado) onSaveEjecutado(selectedProjectId, { ...existing, [mes]: mesData });
   };
 
   const ejec = (mes, cat) => parseFloat(getEjec(mes, cat)) || 0;
@@ -1826,9 +1870,20 @@ const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
     get total() { return this.personal + this.bienes + this.servicios; },
   };
 
-  const fmt  = (v) => v > 0  ? `S/ ${v.toLocaleString('es-PE')}` : '—';
-  const fmtE = (v) => v > 0  ? `S/ ${v.toLocaleString('es-PE')}` : '—';
+  const fmt  = (v) => v > 0 ? `S/ ${v.toLocaleString('es-PE')}` : '—';
+  const fmtE = (v) => v > 0 ? `S/ ${v.toLocaleString('es-PE')}` : '—';
 
+  // Build cumulative chart data (acumulado programado vs ejecutado)
+  let cumProg = 0, cumEjec = 0;
+  const chartData = meses.map((mes, i) => {
+    cumProg += costosPorMes[i].total;
+    cumEjec += ejec(mes, 'personal') + ejec(mes, 'bienes') + ejec(mes, 'servicios');
+    return { mes: fmtMesLabel(mes), gp_acum: Math.round(cumProg), real_acum: Math.round(cumEjec) };
+  });
+
+  // Layout constants for shared column structure
+  const LABEL_W = 'w-48 flex-shrink-0';
+  const TOTAL_W = 'w-32 flex-shrink-0';
 
   return (
     <div className="space-y-6">
@@ -1853,127 +1908,201 @@ const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
 
       {selectedProject ? (
         <>
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <GanttChart projects={[selectedProject]} />
-          </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* ── Single scrollable container — Gantt + cost table share the same column widths ── */}
+          <div className="overflow-x-auto custom-scrollbar">
+            <div className="min-w-[900px]">
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {/* Tabla header */}
-            <div className="px-6 py-4 bg-navy-800 flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-white">Costos por Mes</h4>
-                <p className="text-[10px] text-white/50 mt-0.5">Personal · Bienes · Servicios</p>
-              </div>
-              <div className="flex items-center gap-4 text-[10px] font-bold">
-                <span className="flex items-center gap-1.5 text-blue-300"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block"></span>Programado</span>
-                <span className="flex items-center gap-1.5 text-emerald-300"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>Ejecutado</span>
-              </div>
-            </div>
+              {/* ═══ GANTT SECTION ═══ */}
+              <div className="px-4 pt-5 pb-3">
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-max">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-gray-100">
-                    <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest sticky left-0 bg-slate-50 min-w-[150px]">Categoría</th>
-                    {meses.map(mes => (
-                      <th key={mes} className="text-right px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{formatMesLabel(mes)}</th>
+                {/* Month headers */}
+                <div className="flex border-b border-gray-100 mb-1">
+                  <div className={`${LABEL_W} text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-end pb-1.5`}>Proyecto</div>
+                  <div className="flex flex-1">
+                    {viewMonths.map((month, i) => (
+                      <div key={i} className="border-l border-gray-100 text-center py-1.5 text-[10px] font-bold text-navy-800 uppercase tracking-tighter"
+                        style={{ width: `${monthColWidths[i]}%` }}>
+                        {MONTH_NAMES_ES[month.getMonth()].slice(0,3).toUpperCase()} {month.getFullYear()}
+                      </div>
                     ))}
-                    <th className="text-right px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest sticky right-0 bg-slate-50">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
+                  </div>
+                  <div className={TOTAL_W} />
+                </div>
 
-                  {/* ── PROGRAMADO section ── */}
-                  <tr className="bg-blue-50 border-y border-blue-100">
-                    <td colSpan={meses.length + 2} className="px-5 py-1.5">
-                      <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Programado</span>
-                    </td>
-                  </tr>
-
-                  {[
-                    { label: 'Personal',  key: 'personal',  color: 'blue'   },
-                    { label: 'Bienes',    key: 'bienes',    color: 'sky'    },
-                    { label: 'Servicios', key: 'servicios', color: 'indigo' },
-                  ].map(({ label, key, color }) => (
-                    <tr key={`prog-${key}`} className="border-b border-gray-50 hover:bg-slate-50/50">
-                      <td className="px-5 py-2.5 sticky left-0 bg-white">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full bg-${color}-400 shrink-0`}></div>
-                          <span className="text-xs font-medium text-slate-600">{label}</span>
-                        </div>
-                      </td>
-                      {costosPorMes.map(({ mes, ...vals }) => (
-                        <td key={mes} className={`px-4 py-2.5 text-right text-xs font-medium ${vals[key] > 0 ? `text-${color}-600` : 'text-slate-300'}`}>
-                          {fmt(vals[key])}
-                        </td>
-                      ))}
-                      <td className={`px-5 py-2.5 text-right text-xs font-bold text-${color}-600 sticky right-0 bg-white`}>{fmt(totProg[key])}</td>
-                    </tr>
-                  ))}
-
-                  <tr className="bg-blue-600 border-b border-blue-700">
-                    <td className="px-5 py-2.5 sticky left-0 bg-blue-600">
-                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Total Prog.</span>
-                    </td>
-                    {costosPorMes.map(({ mes, total }) => (
-                      <td key={mes} className={`px-4 py-2.5 text-right text-xs font-bold ${total > 0 ? 'text-white' : 'text-white/30'}`}>{fmt(total)}</td>
+                {/* Week sub-headers */}
+                <div className="flex border-b border-gray-100 pb-2 mb-3">
+                  <div className={LABEL_W} />
+                  <div className="flex flex-1">
+                    {viewWeeks.map((week, i) => (
+                      <div key={i} className="border-l border-gray-50 text-center text-[9px] text-slate-400"
+                        style={{ width: `${weekColWidths[i]}%` }}>
+                        S{getWeekNum(week)}
+                      </div>
                     ))}
-                    <td className="px-5 py-2.5 text-right text-xs font-bold text-white sticky right-0 bg-blue-600">{fmt(totProg.total)}</td>
-                  </tr>
+                  </div>
+                  <div className={TOTAL_W} />
+                </div>
 
-                  {/* ── EJECUTADO section ── */}
-                  <tr className="bg-emerald-50 border-y border-emerald-100">
-                    <td colSpan={meses.length + 2} className="px-5 py-1.5">
-                      <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Ejecutado Real — edita cada celda</span>
-                    </td>
-                  </tr>
+                {/* Gantt bar row */}
+                <div className="flex items-center pb-2">
+                  <div className={`${LABEL_W} pr-4`}>
+                    <p className="text-xs font-bold text-navy-800 truncate uppercase">{selectedProject.nombre}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${selectedProject.estado === 'Finalizado' ? 'bg-green-400' : selectedProject.estado === 'Detenido' ? 'bg-red-400' : 'bg-blue-400'}`}></span>
+                      <span className="text-[9px] text-slate-400">{selectedProject.estado}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 h-9 bg-slate-50/50 rounded-xl relative border border-gray-50 overflow-hidden">
+                    {barWidth > 0 && (
+                      <div
+                        className={`absolute h-full flex items-center justify-between px-3 shadow-sm ${selectedProject.estado === 'Finalizado' ? 'bg-gradient-to-r from-green-400 to-green-500' : selectedProject.estado === 'Detenido' ? 'bg-gradient-to-r from-red-400 to-red-500' : 'bg-gradient-to-r from-blue-500 to-indigo-600'}`}
+                        style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
+                      >
+                        <span className="text-[10px] font-bold text-white whitespace-nowrap">{fmtDate(pStart)}</span>
+                        <span className="text-[10px] font-bold text-white/90 whitespace-nowrap">{diffD(pStart, pEnd) + 1} días</span>
+                        <span className="text-[10px] font-bold text-white whitespace-nowrap">{fmtDate(pEnd)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className={TOTAL_W} />
+                </div>
+              </div>
 
-                  {[
-                    { label: 'Personal',  cat: 'personal'  },
-                    { label: 'Bienes',    cat: 'bienes'    },
-                    { label: 'Servicios', cat: 'servicios' },
-                  ].map(({ label, cat }) => (
-                    <tr key={`ejec-${cat}`} className="border-b border-gray-50 bg-emerald-50/30">
-                      <td className="px-5 py-2 sticky left-0 bg-emerald-50/40">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></div>
-                          <span className="text-xs font-medium text-slate-600">{label}</span>
-                        </div>
-                      </td>
-                      {meses.map(mes => (
-                        <td key={mes} className="px-4 py-2 text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            value={getEjec(mes, cat)}
-                            onChange={(e) => handleEjecChange(mes, cat, e.target.value)}
-                            onBlur={() => handleEjecBlur(mes, cat)}
-                            placeholder="0"
-                            className="w-full text-right bg-transparent border-b border-dashed border-emerald-300 focus:border-emerald-500 outline-none text-xs font-bold text-emerald-700 placeholder-slate-300 py-0.5"
-                          />
-                        </td>
-                      ))}
-                      <td className="px-5 py-2 text-right text-xs font-bold text-emerald-600 sticky right-0 bg-emerald-50/40">
-                        {fmtE(totEjec[cat])}
-                      </td>
-                    </tr>
+              {/* ═══ COST TABLE SECTION ═══ */}
+
+              {/* Header bar */}
+              <div className="flex items-center px-4 py-3 bg-navy-800">
+                <div className={`${LABEL_W} text-xs font-bold text-white`}>Categoría</div>
+                <div className="flex flex-1">
+                  {viewMonths.map((month, i) => (
+                    <div key={i} className="text-right text-[10px] font-bold text-white/50 uppercase tracking-widest pr-4"
+                      style={{ width: `${monthColWidths[i]}%` }}>
+                      {fmtMesLabel(meses[i])}
+                    </div>
                   ))}
+                </div>
+                <div className={`${TOTAL_W} text-right text-[10px] font-bold text-white/50 uppercase tracking-widest`}>Total</div>
+              </div>
 
-                  <tr className="bg-emerald-600">
-                    <td className="px-5 py-2.5 sticky left-0 bg-emerald-600">
-                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Total Ejec.</span>
-                    </td>
-                    {meses.map(mes => {
-                      const t = ejec(mes,'personal') + ejec(mes,'bienes') + ejec(mes,'servicios');
-                      return <td key={mes} className={`px-4 py-2.5 text-right text-xs font-bold ${t > 0 ? 'text-white' : 'text-white/30'}`}>{fmtE(t)}</td>;
-                    })}
-                    <td className="px-5 py-2.5 text-right text-xs font-bold text-white sticky right-0 bg-emerald-600">{fmtE(totEjec.total)}</td>
-                  </tr>
+              {/* ── PROGRAMADO section ── */}
+              <div className="flex items-center px-4 py-1.5 bg-blue-50 border-y border-blue-100">
+                <div className={`${LABEL_W} text-[9px] font-bold text-blue-500 uppercase tracking-widest`}>Programado</div>
+                <div className="flex-1" /><div className={TOTAL_W} />
+              </div>
 
-                </tbody>
-              </table>
+              {[
+                { label: 'Personal',  key: 'personal',  color: 'blue'   },
+                { label: 'Bienes',    key: 'bienes',    color: 'sky'    },
+                { label: 'Servicios', key: 'servicios', color: 'indigo' },
+              ].map(({ label, key, color }) => (
+                <div key={`prog-${key}`} className="flex items-center px-4 py-2.5 border-b border-gray-50 hover:bg-slate-50/50">
+                  <div className={`${LABEL_W} flex items-center gap-2`}>
+                    <div className={`w-2 h-2 rounded-full bg-${color}-400 shrink-0`}></div>
+                    <span className="text-xs font-medium text-slate-600">{label}</span>
+                  </div>
+                  <div className="flex flex-1">
+                    {costosPorMes.map(({ mes, ...vals }, i) => (
+                      <div key={mes} className={`text-right text-xs font-medium pr-4 ${vals[key] > 0 ? `text-${color}-600` : 'text-slate-300'}`}
+                        style={{ width: `${monthColWidths[i]}%` }}>
+                        {fmt(vals[key])}
+                      </div>
+                    ))}
+                  </div>
+                  <div className={`${TOTAL_W} text-right text-xs font-bold text-${color}-600`}>{fmt(totProg[key])}</div>
+                </div>
+              ))}
+
+              <div className="flex items-center px-4 py-2.5 bg-blue-600 border-b border-blue-700">
+                <div className={`${LABEL_W} text-[10px] font-bold text-white uppercase tracking-wider`}>Total Prog.</div>
+                <div className="flex flex-1">
+                  {costosPorMes.map(({ mes, total }, i) => (
+                    <div key={mes} className={`text-right text-xs font-bold pr-4 ${total > 0 ? 'text-white' : 'text-white/30'}`}
+                      style={{ width: `${monthColWidths[i]}%` }}>
+                      {fmt(total)}
+                    </div>
+                  ))}
+                </div>
+                <div className={`${TOTAL_W} text-right text-xs font-bold text-white`}>{fmt(totProg.total)}</div>
+              </div>
+
+              {/* ── EJECUTADO section ── */}
+              <div className="flex items-center px-4 py-1.5 bg-emerald-50 border-y border-emerald-100">
+                <div className={`${LABEL_W} text-[9px] font-bold text-emerald-600 uppercase tracking-widest`}>Ejecutado Real — edita cada celda</div>
+                <div className="flex-1" /><div className={TOTAL_W} />
+              </div>
+
+              {[
+                { label: 'Personal',  cat: 'personal'  },
+                { label: 'Bienes',    cat: 'bienes'    },
+                { label: 'Servicios', cat: 'servicios' },
+              ].map(({ label, cat }) => (
+                <div key={`ejec-${cat}`} className="flex items-center px-4 py-2 border-b border-gray-50 bg-emerald-50/30">
+                  <div className={`${LABEL_W} flex items-center gap-2`}>
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></div>
+                    <span className="text-xs font-medium text-slate-600">{label}</span>
+                  </div>
+                  <div className="flex flex-1">
+                    {meses.map((mes, i) => (
+                      <div key={mes} className="pr-3" style={{ width: `${monthColWidths[i]}%` }}>
+                        <input
+                          type="number" min="0"
+                          value={getEjec(mes, cat)}
+                          onChange={(e) => handleEjecChange(mes, cat, e.target.value)}
+                          onBlur={() => handleEjecBlur(mes, cat)}
+                          placeholder="0"
+                          className="w-full text-right bg-transparent border-b border-dashed border-emerald-300 focus:border-emerald-500 outline-none text-xs font-bold text-emerald-700 placeholder-slate-300 py-0.5"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className={`${TOTAL_W} text-right text-xs font-bold text-emerald-600`}>{fmtE(totEjec[cat])}</div>
+                </div>
+              ))}
+
+              <div className="flex items-center px-4 py-2.5 bg-emerald-600">
+                <div className={`${LABEL_W} text-[10px] font-bold text-white uppercase tracking-wider`}>Total Ejec.</div>
+                <div className="flex flex-1">
+                  {meses.map((mes, i) => {
+                    const t = ejec(mes,'personal') + ejec(mes,'bienes') + ejec(mes,'servicios');
+                    return (
+                      <div key={mes} className={`text-right text-xs font-bold pr-4 ${t > 0 ? 'text-white' : 'text-white/30'}`}
+                        style={{ width: `${monthColWidths[i]}%` }}>
+                        {fmtE(t)}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className={`${TOTAL_W} text-right text-xs font-bold text-white`}>{fmtE(totEjec.total)}</div>
+              </div>
+
             </div>
           </div>
+        </div>
+
+        {/* ── Gasto Acumulado Chart ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h4 className="text-sm font-bold text-navy-800 uppercase tracking-wide mb-0.5">Gasto Acumulado — Comparativo (S/)</h4>
+          <p className="text-[10px] text-slate-400 mb-5">Total acumulado programado vs ejecutado por mes</p>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+              <YAxis
+                axisLine={false} tickLine={false}
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`}
+              />
+              <Tooltip
+                formatter={(value) => [`S/ ${value.toLocaleString('es-PE')}`]}
+                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+              />
+              <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="gp_acum" name="GP Acumulado" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="real_acum" name="Gasto Real Acumulado" fill="#f97316" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
         </>
       ) : (
         <div className="py-32 flex flex-col items-center justify-center text-center opacity-40 bg-white rounded-3xl border border-dashed border-gray-200">
