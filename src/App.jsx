@@ -1742,12 +1742,16 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
 };
 
 // ── CronogramaView ────────────────────────────────────────────────────────
-const CronogramaView = ({ projects, personnel }) => {
+const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
   const [selectedProjectId, setSelectedProjectId] = React.useState(projects[0]?.id || null);
+  const [localEjec, setLocalEjec] = React.useState({}); // { [mes]: { personal, bienes, servicios } }
 
   React.useEffect(() => {
     if (!selectedProjectId && projects.length > 0) setSelectedProjectId(projects[0].id);
   }, [projects]);
+
+  // Reset local ejecutado when project changes
+  React.useEffect(() => { setLocalEjec({}); }, [selectedProjectId]);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
 
@@ -1757,8 +1761,8 @@ const CronogramaView = ({ projects, personnel }) => {
     meses = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
   }
 
+  // ── Programado ──────────────────────────────────────────────────────────
   const costosPorMes = meses.map(mes => {
-    // ── Personal ──
     let personalCost = 0;
     personnel.forEach(person => {
       const worksOnProject = (person.proyectos || []).includes(selectedProject?.nombre);
@@ -1767,38 +1771,83 @@ const CronogramaView = ({ projects, personnel }) => {
       const isActive = personMeses.length > 0 ? personMeses.includes(mes) : true;
       if (isActive) personalCost += person.remuneracion || 0;
     });
-
-    // ── Bienes (materiales) ──
     let bienesCost = 0;
     (selectedProject?.materiales_cronograma || []).forEach(mat => {
       const matMeses = mat.meses || (mat.mes ? [mat.mes] : []);
       if (matMeses.includes(mes)) bienesCost += mat.costo || 0;
     });
-
-    // ── Servicios ──
     let serviciosCost = 0;
     (selectedProject?.servicios_cronograma || []).forEach(srv => {
       const srvMeses = srv.meses || (srv.mes ? [srv.mes] : []);
       if (srvMeses.includes(mes)) serviciosCost += srv.costo || 0;
     });
-
     return { mes, personal: personalCost, bienes: bienesCost, servicios: serviciosCost, total: personalCost + bienesCost + serviciosCost };
   });
 
-  const totPersonal  = costosPorMes.reduce((s, m) => s + m.personal, 0);
-  const totBienes    = costosPorMes.reduce((s, m) => s + m.bienes, 0);
-  const totServicios = costosPorMes.reduce((s, m) => s + m.servicios, 0);
-  const totGeneral   = totPersonal + totBienes + totServicios;
+  const totProg = {
+    personal:  costosPorMes.reduce((s, m) => s + m.personal, 0),
+    bienes:    costosPorMes.reduce((s, m) => s + m.bienes, 0),
+    servicios: costosPorMes.reduce((s, m) => s + m.servicios, 0),
+    total:     costosPorMes.reduce((s, m) => s + m.total, 0),
+  };
 
-  const fmt = (v) => v > 0 ? `S/ ${v.toLocaleString('es-PE')}` : '—';
+  // ── Ejecutado ───────────────────────────────────────────────────────────
+  const getEjec = (mes, cat) => {
+    if (localEjec[mes]?.[cat] !== undefined) return localEjec[mes][cat];
+    return selectedProject?.costos_ejecutados?.[mes]?.[cat] ?? '';
+  };
+
+  const handleEjecChange = (mes, cat, value) => {
+    setLocalEjec(prev => ({
+      ...prev,
+      [mes]: { ...(prev[mes] || {}), [cat]: value }
+    }));
+  };
+
+  const handleEjecBlur = (mes, cat) => {
+    if (!selectedProject) return;
+    const existing = selectedProject.costos_ejecutados || {};
+    const mesData = {
+      personal:  parseFloat(getEjec(mes, 'personal'))  || 0,
+      bienes:    parseFloat(getEjec(mes, 'bienes'))    || 0,
+      servicios: parseFloat(getEjec(mes, 'servicios')) || 0,
+    };
+    // update with the latest change
+    mesData[cat] = parseFloat(localEjec[mes]?.[cat]) || 0;
+    const merged = { ...existing, [mes]: mesData };
+    if (onSaveEjecutado) onSaveEjecutado(selectedProjectId, merged);
+  };
+
+  const ejec = (mes, cat) => parseFloat(getEjec(mes, cat)) || 0;
+  const totEjec = {
+    personal:  meses.reduce((s, mes) => s + ejec(mes, 'personal'), 0),
+    bienes:    meses.reduce((s, mes) => s + ejec(mes, 'bienes'), 0),
+    servicios: meses.reduce((s, mes) => s + ejec(mes, 'servicios'), 0),
+    get total() { return this.personal + this.bienes + this.servicios; },
+  };
+
+  const fmt  = (v) => v > 0  ? `S/ ${v.toLocaleString('es-PE')}` : '—';
+  const fmtE = (v) => v > 0  ? `S/ ${v.toLocaleString('es-PE')}` : '—';
+
+  const EjecInput = ({ mes, cat }) => (
+    <input
+      type="number"
+      min="0"
+      value={getEjec(mes, cat)}
+      onChange={(e) => handleEjecChange(mes, cat, e.target.value)}
+      onBlur={() => handleEjecBlur(mes, cat)}
+      placeholder="0"
+      className="w-full text-right bg-transparent border-b border-dashed border-emerald-300 focus:border-emerald-500 outline-none text-xs font-bold text-emerald-700 placeholder-slate-300 py-0.5"
+    />
+  );
 
   return (
     <div className="space-y-6">
-      {/* Selector de proyecto */}
+      {/* Selector */}
       <div className="flex items-center gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div className="flex-1">
           <h3 className="text-2xl font-bold text-navy-800">Cronograma</h3>
-          <p className="text-slate-500 text-sm">Vista por proyecto con costos programados</p>
+          <p className="text-slate-500 text-sm">Costos programados vs ejecutados por proyecto</p>
         </div>
         <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-gray-100">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4">Proyecto:</label>
@@ -1815,78 +1864,115 @@ const CronogramaView = ({ projects, personnel }) => {
 
       {selectedProject ? (
         <>
-          {/* Gantt solo del proyecto seleccionado */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
             <GanttChart projects={[selectedProject]} />
           </div>
 
-          {/* Tabla de costos por mes */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-navy-800">
-              <h4 className="text-sm font-bold text-white">Costos Programados por Mes</h4>
-              <p className="text-[10px] text-white/50 mt-0.5">Personal · Bienes · Servicios</p>
+            {/* Tabla header */}
+            <div className="px-6 py-4 bg-navy-800 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-white">Costos por Mes</h4>
+                <p className="text-[10px] text-white/50 mt-0.5">Personal · Bienes · Servicios</p>
+              </div>
+              <div className="flex items-center gap-4 text-[10px] font-bold">
+                <span className="flex items-center gap-1.5 text-blue-300"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block"></span>Programado</span>
+                <span className="flex items-center gap-1.5 text-emerald-300"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>Ejecutado</span>
+              </div>
             </div>
+
             <div className="overflow-x-auto">
               <table className="w-full min-w-max">
                 <thead>
                   <tr className="bg-slate-50 border-b border-gray-100">
-                    <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest sticky left-0 bg-slate-50 min-w-[120px]">Categoría</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest sticky left-0 bg-slate-50 min-w-[150px]">Categoría</th>
                     {meses.map(mes => (
-                      <th key={mes} className="text-right px-4 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">{formatMesLabel(mes)}</th>
+                      <th key={mes} className="text-right px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{formatMesLabel(mes)}</th>
                     ))}
-                    <th className="text-right px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap sticky right-0 bg-slate-50">Total</th>
+                    <th className="text-right px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest sticky right-0 bg-slate-50">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Personal */}
-                  <tr className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors">
-                    <td className="px-5 py-3 sticky left-0 bg-white">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></div>
-                        <span className="text-xs font-bold text-navy-800">Personal</span>
-                      </div>
+
+                  {/* ── PROGRAMADO section ── */}
+                  <tr className="bg-blue-50 border-y border-blue-100">
+                    <td colSpan={meses.length + 2} className="px-5 py-1.5">
+                      <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Programado</span>
                     </td>
-                    {costosPorMes.map(({ mes, personal }) => (
-                      <td key={mes} className={`px-4 py-3 text-right text-xs font-medium ${personal > 0 ? 'text-blue-700' : 'text-slate-300'}`}>{fmt(personal)}</td>
-                    ))}
-                    <td className="px-5 py-3 text-right text-xs font-bold text-blue-600 sticky right-0 bg-white">{fmt(totPersonal)}</td>
                   </tr>
-                  {/* Bienes */}
-                  <tr className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors">
-                    <td className="px-5 py-3 sticky left-0 bg-white">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></div>
-                        <span className="text-xs font-bold text-navy-800">Bienes</span>
-                      </div>
-                    </td>
-                    {costosPorMes.map(({ mes, bienes }) => (
-                      <td key={mes} className={`px-4 py-3 text-right text-xs font-medium ${bienes > 0 ? 'text-emerald-700' : 'text-slate-300'}`}>{fmt(bienes)}</td>
-                    ))}
-                    <td className="px-5 py-3 text-right text-xs font-bold text-emerald-600 sticky right-0 bg-white">{fmt(totBienes)}</td>
-                  </tr>
-                  {/* Servicios */}
-                  <tr className="border-b border-gray-50 hover:bg-purple-50/30 transition-colors">
-                    <td className="px-5 py-3 sticky left-0 bg-white">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0"></div>
-                        <span className="text-xs font-bold text-navy-800">Servicios</span>
-                      </div>
-                    </td>
-                    {costosPorMes.map(({ mes, servicios }) => (
-                      <td key={mes} className={`px-4 py-3 text-right text-xs font-medium ${servicios > 0 ? 'text-purple-700' : 'text-slate-300'}`}>{fmt(servicios)}</td>
-                    ))}
-                    <td className="px-5 py-3 text-right text-xs font-bold text-purple-600 sticky right-0 bg-white">{fmt(totServicios)}</td>
-                  </tr>
-                  {/* Total */}
-                  <tr className="bg-navy-800">
-                    <td className="px-5 py-3.5 sticky left-0 bg-navy-800">
-                      <span className="text-xs font-bold text-white uppercase tracking-widest">Total</span>
+
+                  {[
+                    { label: 'Personal',  key: 'personal',  color: 'blue'   },
+                    { label: 'Bienes',    key: 'bienes',    color: 'sky'    },
+                    { label: 'Servicios', key: 'servicios', color: 'indigo' },
+                  ].map(({ label, key, color }) => (
+                    <tr key={`prog-${key}`} className="border-b border-gray-50 hover:bg-slate-50/50">
+                      <td className="px-5 py-2.5 sticky left-0 bg-white">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full bg-${color}-400 shrink-0`}></div>
+                          <span className="text-xs font-medium text-slate-600">{label}</span>
+                        </div>
+                      </td>
+                      {costosPorMes.map(({ mes, ...vals }) => (
+                        <td key={mes} className={`px-4 py-2.5 text-right text-xs font-medium ${vals[key] > 0 ? `text-${color}-600` : 'text-slate-300'}`}>
+                          {fmt(vals[key])}
+                        </td>
+                      ))}
+                      <td className={`px-5 py-2.5 text-right text-xs font-bold text-${color}-600 sticky right-0 bg-white`}>{fmt(totProg[key])}</td>
+                    </tr>
+                  ))}
+
+                  <tr className="bg-blue-600 border-b border-blue-700">
+                    <td className="px-5 py-2.5 sticky left-0 bg-blue-600">
+                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Total Prog.</span>
                     </td>
                     {costosPorMes.map(({ mes, total }) => (
-                      <td key={mes} className={`px-4 py-3.5 text-right text-xs font-bold ${total > 0 ? 'text-white' : 'text-white/30'}`}>{fmt(total)}</td>
+                      <td key={mes} className={`px-4 py-2.5 text-right text-xs font-bold ${total > 0 ? 'text-white' : 'text-white/30'}`}>{fmt(total)}</td>
                     ))}
-                    <td className="px-5 py-3.5 text-right text-sm font-bold text-blue-300 sticky right-0 bg-navy-800">{fmt(totGeneral)}</td>
+                    <td className="px-5 py-2.5 text-right text-xs font-bold text-white sticky right-0 bg-blue-600">{fmt(totProg.total)}</td>
                   </tr>
+
+                  {/* ── EJECUTADO section ── */}
+                  <tr className="bg-emerald-50 border-y border-emerald-100">
+                    <td colSpan={meses.length + 2} className="px-5 py-1.5">
+                      <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Ejecutado Real — edita cada celda</span>
+                    </td>
+                  </tr>
+
+                  {[
+                    { label: 'Personal',  cat: 'personal'  },
+                    { label: 'Bienes',    cat: 'bienes'    },
+                    { label: 'Servicios', cat: 'servicios' },
+                  ].map(({ label, cat }) => (
+                    <tr key={`ejec-${cat}`} className="border-b border-gray-50 bg-emerald-50/30">
+                      <td className="px-5 py-2 sticky left-0 bg-emerald-50/40">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></div>
+                          <span className="text-xs font-medium text-slate-600">{label}</span>
+                        </div>
+                      </td>
+                      {meses.map(mes => (
+                        <td key={mes} className="px-4 py-2 text-right">
+                          <EjecInput mes={mes} cat={cat} />
+                        </td>
+                      ))}
+                      <td className="px-5 py-2 text-right text-xs font-bold text-emerald-600 sticky right-0 bg-emerald-50/40">
+                        {fmtE(totEjec[cat])}
+                      </td>
+                    </tr>
+                  ))}
+
+                  <tr className="bg-emerald-600">
+                    <td className="px-5 py-2.5 sticky left-0 bg-emerald-600">
+                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Total Ejec.</span>
+                    </td>
+                    {meses.map(mes => {
+                      const t = ejec(mes,'personal') + ejec(mes,'bienes') + ejec(mes,'servicios');
+                      return <td key={mes} className={`px-4 py-2.5 text-right text-xs font-bold ${t > 0 ? 'text-white' : 'text-white/30'}`}>{fmtE(t)}</td>;
+                    })}
+                    <td className="px-5 py-2.5 text-right text-xs font-bold text-white sticky right-0 bg-emerald-600">{fmtE(totEjec.total)}</td>
+                  </tr>
+
                 </tbody>
               </table>
             </div>
@@ -2117,6 +2203,17 @@ function App() {
     }
   };
 
+  const handleSaveEjecutado = async (projectId, costos_ejecutados) => {
+    try {
+      const { error } = await supabase.from('proyectos').update({ costos_ejecutados }).eq('id', projectId);
+      if (error) throw error;
+      fetchData(true);
+    } catch (err) {
+      console.error("Error al guardar ejecutado:", err);
+      alert(`Error al guardar ejecutado: ${err.message}`);
+    }
+  };
+
   const handleSaveFicha = async (projectId, data, columnName) => {
     try {
       const { error } = await supabase.from('proyectos').update({ [columnName]: data }).eq('id', projectId);
@@ -2262,7 +2359,7 @@ function App() {
           />
         );
       case 'cronograma':
-        return <CronogramaView projects={projects} personnel={personnel} />;
+        return <CronogramaView projects={projects} personnel={personnel} onSaveEjecutado={handleSaveEjecutado} />;
       case 'reportes':
         return (
           <ReportsView
