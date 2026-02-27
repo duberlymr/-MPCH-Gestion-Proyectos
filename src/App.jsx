@@ -1468,44 +1468,40 @@ const ReportsView = ({ personnel, projects }) => {
 
 // ── MaterialesView ────────────────────────────────────────────────────────
 const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma', title = 'Materiales', subtitle = 'Gestión de materiales por proyecto y mes', ViewIcon = Package }) => {
-  const [addingState, setAddingState] = React.useState(null); // { projectId, mes }
-  const [newMat, setNewMat] = React.useState({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
-  const [editingState, setEditingState] = React.useState(null); // { projectId, matId }
+  const [addingProject, setAddingProject] = React.useState(null);
+  const [newItem, setNewItem] = React.useState({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
+  const [editingState, setEditingState] = React.useState(null); // { projectId, itemId }
   const [editVal, setEditVal] = React.useState({});
-  // Estado local optimista: muestra datos inmediatamente sin esperar Supabase
   const [localMats, setLocalMats] = React.useState({});
 
-  // Limpia overrides locales cuando Supabase confirma y actualiza projects
   React.useEffect(() => { setLocalMats({}); }, [projects]);
 
-  const getMats = (projectId) =>
+  const getItems = (projectId) =>
     localMats[projectId] !== undefined
       ? localMats[projectId]
       : (projects.find(p => p.id === projectId)?.[fieldName] || []);
 
-  const handleAdd = (projectId, mes) => {
-    if (!newMat.nombre) return; // solo nombre es requerido
-    const qty = parseFloat(newMat.cantidad) || 1;
-    const cu = parseFloat(newMat.costoUnitario) || 0;
-    const updated = [...getMats(projectId), {
+  const handleAdd = (projectId) => {
+    if (!newItem.nombre) return;
+    const qty = parseFloat(newItem.cantidad) || 1;
+    const cu = parseFloat(newItem.costoUnitario) || 0;
+    const updated = [...getItems(projectId), {
       id: Date.now(),
-      mes,
-      nombre: newMat.nombre,
-      unidad: newMat.unidad || 'Und.',
+      nombre: newItem.nombre,
+      unidad: newItem.unidad || 'Und.',
       cantidad: qty,
       costoUnitario: cu,
-      costo: qty * cu
+      costo: qty * cu,
+      meses: []
     }];
-    // Actualiza UI inmediatamente (optimista)
     setLocalMats(prev => ({ ...prev, [projectId]: updated }));
-    setNewMat({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
-    setAddingState(null);
-    // Guarda en Supabase en segundo plano
+    setNewItem({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
+    setAddingProject(null);
     onSave(projectId, updated);
   };
 
-  const handleDelete = (projectId, matId) => {
-    const updated = getMats(projectId).filter(m => m.id !== matId);
+  const handleDelete = (projectId, itemId) => {
+    const updated = getItems(projectId).filter(m => m.id !== itemId);
     setLocalMats(prev => ({ ...prev, [projectId]: updated }));
     onSave(projectId, updated);
   };
@@ -1513,17 +1509,29 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
   const handleSaveEdit = (projectId) => {
     const qty = parseFloat(editVal.cantidad) || 1;
     const cu = parseFloat(editVal.costoUnitario) || 0;
-    const updated = getMats(projectId).map(m =>
-      m.id === editingState.matId ? { ...m, ...editVal, cantidad: qty, costoUnitario: cu, costo: qty * cu } : m
+    const updated = getItems(projectId).map(m =>
+      m.id === editingState.itemId ? { ...m, ...editVal, cantidad: qty, costoUnitario: cu, costo: qty * cu } : m
     );
     setLocalMats(prev => ({ ...prev, [projectId]: updated }));
     setEditingState(null);
     onSave(projectId, updated);
   };
 
+  const handleToggleMes = (projectId, itemId, mes) => {
+    const updated = getItems(projectId).map(item => {
+      if (item.id !== itemId) return item;
+      const current = item.meses || (item.mes ? [item.mes] : []);
+      const next = current.includes(mes) ? current.filter(m => m !== mes) : [...current, mes];
+      return { ...item, meses: next };
+    });
+    setLocalMats(prev => ({ ...prev, [projectId]: updated }));
+    onSave(projectId, updated);
+  };
+
+  const itemLabel = title === 'Servicios' ? 'servicio' : 'material';
+
   return (
     <div className="space-y-12 animate-in fade-in duration-500">
-      {/* Header */}
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div>
           <h3 className="text-2xl font-bold text-navy-800">{title}</h3>
@@ -1538,14 +1546,14 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
             const y = new Date().getFullYear();
             meses = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
           }
-          const materiales = getMats(project.id);
-          const totalAsignado = materiales.reduce((s, m) => s + (m.costo || 0), 0);
+          const items = getItems(project.id);
+          const totalAsignado = items.reduce((s, m) => s + (m.costo || 0), 0);
           const presupuestoMat = project.presupuesto?.materiales || 0;
           const pct = presupuestoMat > 0 ? Math.min((totalAsignado / presupuestoMat) * 100, 100).toFixed(0) : 0;
+          const isAdding = addingProject === project.id;
 
           return (
             <div key={project.id} className="relative">
-              {/* Sección header — idéntico a Personal */}
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-1.5 h-8 bg-blue-600 rounded-full"></div>
                 <h4 className="text-lg font-bold text-navy-800 uppercase tracking-widest flex items-center gap-3">
@@ -1555,7 +1563,7 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                {/* Tarjeta izquierda — dark navy, igual a Personal */}
+                {/* Tarjeta izquierda */}
                 <div className="lg:col-span-1">
                   <div className="bg-navy-800 text-white p-5 rounded-3xl shadow-xl relative overflow-hidden group border border-navy-700">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
@@ -1569,7 +1577,6 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
                           <p className="text-blue-300 text-[9px] mt-0.5">{project.estado}</p>
                         </div>
                       </div>
-
                       <div className="space-y-4">
                         <div>
                           <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-1">Periodo</p>
@@ -1579,10 +1586,7 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
                           <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-1">Total Asignado</p>
                           <p className="text-sm font-bold text-blue-300">S/ {totalAsignado.toLocaleString('es-PE')}</p>
                           <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
-                            <div
-                              className={`h-1.5 rounded-full transition-all ${parseFloat(pct) > 90 ? 'bg-red-400' : 'bg-blue-400'}`}
-                              style={{ width: `${pct}%` }}
-                            />
+                            <div className={`h-1.5 rounded-full transition-all ${parseFloat(pct) > 90 ? 'bg-red-400' : 'bg-blue-400'}`} style={{ width: `${pct}%` }} />
                           </div>
                           <p className="text-[9px] text-white/30 mt-1">{pct}% del presupuesto</p>
                         </div>
@@ -1591,127 +1595,102 @@ const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma',
                   </div>
                 </div>
 
-                {/* Derecha: secciones por mes */}
-                <div className="lg:col-span-3 space-y-4">
-                  {meses.map((mes) => {
-                    const mesMats = materiales.filter(m => m.mes === mes);
-                    const mesTotal = mesMats.reduce((s, m) => s + (m.costo || 0), 0);
-                    const isAdding = addingState?.projectId === project.id && addingState?.mes === mes;
+                {/* Derecha: tarjetas de ítems con chips de meses */}
+                <div className="lg:col-span-3 space-y-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{title} ({items.length})</span>
+                    <button
+                      onClick={() => { setAddingProject(project.id); setNewItem({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' }); }}
+                      className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-bold hover:bg-blue-700 transition-colors border-none"
+                    >
+                      <Plus size={12} /> Agregar {itemLabel}
+                    </button>
+                  </div>
 
+                  {/* Formulario inline de agregar */}
+                  {isAdding && (
+                    <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200 mb-2">
+                      <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mb-2">Nuevo {itemLabel}</p>
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-4">
+                          <input autoFocus className="w-full border border-blue-300 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder={`Nombre del ${itemLabel}`} value={newItem.nombre} onChange={(e) => setNewItem({ ...newItem, nombre: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleAdd(project.id)} />
+                        </div>
+                        <div className="col-span-2">
+                          <input className="w-full border border-blue-300 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder="Unidad" value={newItem.unidad} onChange={(e) => setNewItem({ ...newItem, unidad: e.target.value })} />
+                        </div>
+                        <div className="col-span-2">
+                          <input type="number" min="0" className="w-full text-right border border-blue-300 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder="Cant." value={newItem.cantidad} onChange={(e) => setNewItem({ ...newItem, cantidad: e.target.value })} />
+                        </div>
+                        <div className="col-span-2">
+                          <input type="number" min="0" className="w-full text-right border border-blue-300 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder="C.Unit." value={newItem.costoUnitario} onChange={(e) => setNewItem({ ...newItem, costoUnitario: e.target.value })} />
+                        </div>
+                        <div className="col-span-2 flex justify-end gap-1">
+                          <button onClick={() => handleAdd(project.id)} className="p-1.5 bg-blue-600 text-white rounded-lg border-none hover:bg-blue-700"><Check size={12} /></button>
+                          <button onClick={() => setAddingProject(null)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg border-none hover:bg-slate-200"><X size={12} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Estado vacío */}
+                  {items.length === 0 && !isAdding && (
+                    <div className="py-12 bg-slate-50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center">
+                      <ViewIcon className="text-slate-300 mb-2" size={32} />
+                      <p className="text-xs text-slate-400 font-medium">Sin {title.toLowerCase()} — haz clic en Agregar</p>
+                    </div>
+                  )}
+
+                  {/* Tarjetas de ítems */}
+                  {items.map((item) => {
+                    const isEditing = editingState?.projectId === project.id && editingState?.itemId === item.id;
+                    const activeMeses = item.meses || (item.mes ? [item.mes] : []);
                     return (
-                      <div key={mes} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        {/* Cabecera del mes */}
-                        <div className="flex justify-between items-center px-5 py-3 bg-slate-50 border-b border-gray-100">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>
-                            <span className="text-xs font-bold text-navy-800 uppercase tracking-wider">{formatMesLabel(mes)}</span>
+                      <div key={item.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm group hover:border-blue-200 transition-all">
+                        {isEditing ? (
+                          <div className="grid grid-cols-12 gap-2 items-center">
+                            <div className="col-span-4"><input className="w-full border border-blue-200 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-400" value={editVal.nombre} onChange={(e) => setEditVal({ ...editVal, nombre: e.target.value })} /></div>
+                            <div className="col-span-2"><input className="w-full border border-blue-200 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" value={editVal.unidad} onChange={(e) => setEditVal({ ...editVal, unidad: e.target.value })} /></div>
+                            <div className="col-span-2"><input type="number" min="0" className="w-full text-right border border-blue-200 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" value={editVal.cantidad} onChange={(e) => setEditVal({ ...editVal, cantidad: e.target.value })} /></div>
+                            <div className="col-span-2"><input type="number" min="0" className="w-full text-right border border-blue-200 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" value={editVal.costoUnitario} onChange={(e) => setEditVal({ ...editVal, costoUnitario: e.target.value })} /></div>
+                            <div className="col-span-2 flex justify-end gap-1">
+                              <button onClick={() => handleSaveEdit(project.id)} className="p-1.5 bg-blue-600 text-white rounded-lg border-none hover:bg-blue-700"><Check size={12} /></button>
+                              <button onClick={() => setEditingState(null)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg border-none hover:bg-slate-200"><X size={12} /></button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            {mesTotal > 0 && (
-                              <span className="text-xs font-bold text-blue-600">S/ {mesTotal.toLocaleString('es-PE')}</span>
-                            )}
-                            <button
-                              onClick={() => {
-                                setAddingState({ projectId: project.id, mes });
-                                setNewMat({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
-                              }}
-                              className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-colors border-none"
-                            >
-                              <Plus size={11} /> Agregar
-                            </button>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-navy-800">{item.nombre}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{item.unidad} · {item.cantidad} und · S/ {(item.costoUnitario || 0).toLocaleString('es-PE')}/u</p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 ml-4">
+                              <span className="text-sm font-bold text-blue-600">S/ {(item.costo || 0).toLocaleString('es-PE')}</span>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => { setEditingState({ projectId: project.id, itemId: item.id }); setEditVal({ nombre: item.nombre, unidad: item.unidad, cantidad: item.cantidad, costoUnitario: item.costoUnitario }); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg border-none bg-transparent transition-colors"><Edit2 size={12} /></button>
+                                <button onClick={() => handleDelete(project.id, item.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg border-none bg-transparent transition-colors"><Trash2 size={12} /></button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {/* Chips de meses — igual que Personal */}
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Meses activos</p>
+                          <div className="flex flex-wrap gap-1">
+                            {meses.map(mes => (
+                              <button
+                                key={mes}
+                                onClick={() => handleToggleMes(project.id, item.id, mes)}
+                                className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors border-none cursor-pointer ${
+                                  activeMeses.includes(mes)
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                }`}
+                              >
+                                {formatMesLabel(mes)}
+                              </button>
+                            ))}
                           </div>
                         </div>
-
-                        {/* Lista de materiales */}
-                        {(mesMats.length > 0 || isAdding) && (
-                          <div className="divide-y divide-gray-50">
-                            {/* Encabezados columnas */}
-                            <div className="grid grid-cols-12 gap-2 px-5 py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                              <div className="col-span-4">Material</div>
-                              <div className="col-span-2">Unidad</div>
-                              <div className="col-span-1 text-right">Cant.</div>
-                              <div className="col-span-2 text-right">C. Unit.</div>
-                              <div className="col-span-2 text-right">Total</div>
-                              <div className="col-span-1"></div>
-                            </div>
-
-                            {/* Filas de materiales */}
-                            {mesMats.map((mat) => {
-                              const isEditing = editingState?.projectId === project.id && editingState?.matId === mat.id;
-                              return (
-                                <div key={mat.id} className="grid grid-cols-12 gap-2 px-5 py-2.5 items-center hover:bg-slate-50 transition-colors group">
-                                  {isEditing ? (
-                                    <>
-                                      <div className="col-span-4">
-                                        <input className="w-full border border-blue-200 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-400" value={editVal.nombre} onChange={(e) => setEditVal({ ...editVal, nombre: e.target.value })} />
-                                      </div>
-                                      <div className="col-span-2">
-                                        <input className="w-full border border-blue-200 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" value={editVal.unidad} onChange={(e) => setEditVal({ ...editVal, unidad: e.target.value })} />
-                                      </div>
-                                      <div className="col-span-1">
-                                        <input type="number" min="0" className="w-full text-right border border-blue-200 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" value={editVal.cantidad} onChange={(e) => setEditVal({ ...editVal, cantidad: e.target.value })} />
-                                      </div>
-                                      <div className="col-span-2">
-                                        <input type="number" min="0" className="w-full text-right border border-blue-200 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" value={editVal.costoUnitario} onChange={(e) => setEditVal({ ...editVal, costoUnitario: e.target.value })} />
-                                      </div>
-                                      <div className="col-span-2 text-right text-xs font-bold text-blue-600">
-                                        S/ {((parseFloat(editVal.cantidad) || 0) * (parseFloat(editVal.costoUnitario) || 0)).toLocaleString('es-PE')}
-                                      </div>
-                                      <div className="col-span-1 flex justify-end gap-1">
-                                        <button onClick={() => handleSaveEdit(project.id)} className="p-1 bg-blue-600 text-white rounded border-none hover:bg-blue-700"><Check size={11} /></button>
-                                        <button onClick={() => setEditingState(null)} className="p-1 bg-slate-100 text-slate-500 rounded border-none hover:bg-slate-200"><X size={11} /></button>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div className="col-span-4 text-xs font-bold text-navy-800">{mat.nombre}</div>
-                                      <div className="col-span-2 text-xs text-slate-400">{mat.unidad}</div>
-                                      <div className="col-span-1 text-xs text-right text-slate-600">{mat.cantidad}</div>
-                                      <div className="col-span-2 text-xs text-right text-slate-600">S/ {(mat.costoUnitario || 0).toLocaleString('es-PE')}</div>
-                                      <div className="col-span-2 text-xs text-right font-bold text-navy-800">S/ {(mat.costo || 0).toLocaleString('es-PE')}</div>
-                                      <div className="col-span-1 flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setEditingState({ projectId: project.id, matId: mat.id }); setEditVal({ nombre: mat.nombre, unidad: mat.unidad, cantidad: mat.cantidad, costoUnitario: mat.costoUnitario }); }} className="p-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded border-none bg-transparent transition-colors"><Edit2 size={11} /></button>
-                                        <button onClick={() => handleDelete(project.id, mat.id)} className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded border-none bg-transparent transition-colors"><Trash2 size={11} /></button>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-                              );
-                            })}
-
-                            {/* Fila inline para agregar */}
-                            {isAdding && (
-                              <div className="grid grid-cols-12 gap-2 px-5 py-2.5 items-center bg-blue-50 border-t border-blue-100">
-                                <div className="col-span-4">
-                                  <input autoFocus className="w-full border border-blue-300 rounded-lg p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder="Nombre del material" value={newMat.nombre} onChange={(e) => setNewMat({ ...newMat, nombre: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleAdd(project.id, mes)} />
-                                </div>
-                                <div className="col-span-2">
-                                  <input className="w-full border border-blue-300 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder="Und." value={newMat.unidad} onChange={(e) => setNewMat({ ...newMat, unidad: e.target.value })} />
-                                </div>
-                                <div className="col-span-1">
-                                  <input type="number" min="0" className="w-full text-right border border-blue-300 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder="1" value={newMat.cantidad} onChange={(e) => setNewMat({ ...newMat, cantidad: e.target.value })} />
-                                </div>
-                                <div className="col-span-2">
-                                  <input type="number" min="0" className="w-full text-right border border-blue-300 rounded-lg p-1.5 text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white" placeholder="0.00" value={newMat.costoUnitario} onChange={(e) => setNewMat({ ...newMat, costoUnitario: e.target.value })} />
-                                </div>
-                                <div className="col-span-2 text-right text-xs font-bold text-blue-600">
-                                  S/ {((parseFloat(newMat.cantidad) || 0) * (parseFloat(newMat.costoUnitario) || 0)).toLocaleString('es-PE')}
-                                </div>
-                                <div className="col-span-1 flex justify-end gap-1">
-                                  <button onClick={() => handleAdd(project.id, mes)} className="p-1 bg-blue-600 text-white rounded border-none hover:bg-blue-700"><Check size={11} /></button>
-                                  <button onClick={() => setAddingState(null)} className="p-1 bg-slate-100 text-slate-500 rounded border-none hover:bg-slate-200"><X size={11} /></button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Estado vacío del mes */}
-                        {mesMats.length === 0 && !isAdding && (
-                          <div className="px-5 py-4 text-[10px] text-slate-300 italic">
-                            Sin items — haz clic en Agregar
-                          </div>
-                        )}
                       </div>
                     );
                   })}
