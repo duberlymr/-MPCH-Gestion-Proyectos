@@ -16,7 +16,8 @@ import {
   Save,
   X,
   Edit2,
-  Package
+  Package,
+  Wrench
 } from 'lucide-react';
 import GanttChart from './components/GanttChart';
 import { ProjectStateChart, BudgetVsActualChart } from './components/DashboardCharts';
@@ -89,6 +90,7 @@ const Sidebar = ({ collapsed, setCollapsed, currentView, setCurrentView }) => {
     { id: 'proyectos', icon: Layers, label: 'Proyectos' },
     { id: 'personal', icon: Users, label: 'Personal' },
     { id: 'materiales', icon: Package, label: 'Materiales' },
+    { id: 'servicios', icon: Wrench, label: 'Servicios' },
     { id: 'expedientes', icon: FileCheck, label: 'Avance de Expediente' },
     { id: 'cronograma', icon: Calendar, label: 'Cronograma' },
   ];
@@ -1423,7 +1425,7 @@ const formatMesLabel = (mesStr) => {
 };
 
 // ── MaterialesView ────────────────────────────────────────────────────────
-const MaterialesView = ({ projects, onSave }) => {
+const MaterialesView = ({ projects, onSave, fieldName = 'materiales_cronograma', title = 'Materiales', subtitle = 'Gestión de materiales por proyecto y mes', ViewIcon = Package }) => {
   const [addingState, setAddingState] = React.useState(null); // { projectId, mes }
   const [newMat, setNewMat] = React.useState({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
   const [editingState, setEditingState] = React.useState(null); // { projectId, matId }
@@ -1437,7 +1439,7 @@ const MaterialesView = ({ projects, onSave }) => {
   const getMats = (projectId) =>
     localMats[projectId] !== undefined
       ? localMats[projectId]
-      : (projects.find(p => p.id === projectId)?.materiales_cronograma || []);
+      : (projects.find(p => p.id === projectId)?.[fieldName] || []);
 
   const handleAdd = (projectId, mes) => {
     if (!newMat.nombre) return; // solo nombre es requerido
@@ -1482,8 +1484,8 @@ const MaterialesView = ({ projects, onSave }) => {
       {/* Header */}
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div>
-          <h3 className="text-2xl font-bold text-navy-800">Ficha de Materiales</h3>
-          <p className="text-slate-500 text-sm">Gestión de materiales por proyecto y mes</p>
+          <h3 className="text-2xl font-bold text-navy-800">{title}</h3>
+          <p className="text-slate-500 text-sm">{subtitle}</p>
         </div>
       </div>
 
@@ -1514,7 +1516,7 @@ const MaterialesView = ({ projects, onSave }) => {
                     <div className="relative z-10 text-left">
                       <div className="flex items-center gap-3 mb-5">
                         <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/20 shrink-0">
-                          <Package size={18} className="text-white/80" />
+                          <ViewIcon size={18} className="text-white/80" />
                         </div>
                         <div>
                           <p className="font-bold text-xs leading-tight">{project.nombre}</p>
@@ -1666,7 +1668,7 @@ const MaterialesView = ({ projects, onSave }) => {
                         {/* Estado vacío del mes */}
                         {mesMats.length === 0 && !isAdding && (
                           <div className="px-5 py-4 text-[10px] text-slate-300 italic">
-                            Sin materiales — haz clic en Agregar
+                            Sin items — haz clic en Agregar
                           </div>
                         )}
                       </div>
@@ -1680,7 +1682,7 @@ const MaterialesView = ({ projects, onSave }) => {
 
         {projects.length === 0 && (
           <div className="py-20 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-            <Package className="text-slate-200 mb-3" size={48} />
+            <ViewIcon className="text-slate-200 mb-3" size={48} />
             <p className="text-slate-400 font-medium">No hay proyectos registrados</p>
           </div>
         )}
@@ -1892,14 +1894,14 @@ function App() {
     }
   };
 
-  const handleSaveMateriales = async (projectId, materialesData) => {
+  const handleSaveFicha = async (projectId, data, columnName) => {
     try {
-      const { error } = await supabase.from('proyectos').update({ materiales_cronograma: materialesData }).eq('id', projectId);
+      const { error } = await supabase.from('proyectos').update({ [columnName]: data }).eq('id', projectId);
       if (error) throw error;
       fetchData(true);
     } catch (err) {
-      console.error("Error al guardar materiales:", err);
-      alert(`Error al guardar materiales: ${err.message}\n\nAsegúrese de que la columna "materiales_cronograma" (tipo JSONB) exista en la tabla "proyectos" de Supabase.`);
+      console.error(`Error al guardar ${columnName}:`, err);
+      alert(`Error al guardar: ${err.message}`);
     }
   };
 
@@ -2009,7 +2011,22 @@ function App() {
         return (
           <MaterialesView
             projects={projects}
-            onSave={handleSaveMateriales}
+            fieldName="materiales_cronograma"
+            title="Materiales"
+            subtitle="Gestión de materiales por proyecto y mes"
+            ViewIcon={Package}
+            onSave={(id, data) => handleSaveFicha(id, data, 'materiales_cronograma')}
+          />
+        );
+      case 'servicios':
+        return (
+          <MaterialesView
+            projects={projects}
+            fieldName="servicios_cronograma"
+            title="Servicios"
+            subtitle="Gestión de servicios por proyecto y mes"
+            ViewIcon={Wrench}
+            onSave={(id, data) => handleSaveFicha(id, data, 'servicios_cronograma')}
           />
         );
       case 'expedientes':
