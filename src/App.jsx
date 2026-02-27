@@ -1829,17 +1829,6 @@ const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
   const fmt  = (v) => v > 0  ? `S/ ${v.toLocaleString('es-PE')}` : '—';
   const fmtE = (v) => v > 0  ? `S/ ${v.toLocaleString('es-PE')}` : '—';
 
-  const EjecInput = ({ mes, cat }) => (
-    <input
-      type="number"
-      min="0"
-      value={getEjec(mes, cat)}
-      onChange={(e) => handleEjecChange(mes, cat, e.target.value)}
-      onBlur={() => handleEjecBlur(mes, cat)}
-      placeholder="0"
-      className="w-full text-right bg-transparent border-b border-dashed border-emerald-300 focus:border-emerald-500 outline-none text-xs font-bold text-emerald-700 placeholder-slate-300 py-0.5"
-    />
-  );
 
   return (
     <div className="space-y-6">
@@ -1953,7 +1942,15 @@ const CronogramaView = ({ projects, personnel, onSaveEjecutado }) => {
                       </td>
                       {meses.map(mes => (
                         <td key={mes} className="px-4 py-2 text-right">
-                          <EjecInput mes={mes} cat={cat} />
+                          <input
+                            type="number"
+                            min="0"
+                            value={getEjec(mes, cat)}
+                            onChange={(e) => handleEjecChange(mes, cat, e.target.value)}
+                            onBlur={() => handleEjecBlur(mes, cat)}
+                            placeholder="0"
+                            className="w-full text-right bg-transparent border-b border-dashed border-emerald-300 focus:border-emerald-500 outline-none text-xs font-bold text-emerald-700 placeholder-slate-300 py-0.5"
+                          />
                         </td>
                       ))}
                       <td className="px-5 py-2 text-right text-xs font-bold text-emerald-600 sticky right-0 bg-emerald-50/40">
