@@ -930,6 +930,28 @@ const DossierView = ({ projects, onUpdateDossier, onSetFullDossier }) => {
   );
 };
 
+// ── Helpers de Meses ─────────────────────────────────────────────────────
+const MESES_LABELS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+const getMesesProyecto = (inicio, fin) => {
+  if (!inicio || !fin) return [];
+  const [sy, sm] = inicio.split('-').map(Number);
+  const [ey, em] = fin.split('-').map(Number);
+  const meses = [];
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    meses.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return meses;
+};
+
+const formatMesLabel = (mesStr) => {
+  const [y, m] = mesStr.split('-');
+  return `${MESES_LABELS[parseInt(m, 10) - 1].slice(0,3)} ${y}`;
+};
+
 const PersonalView = ({
   personnel,
   onAddPersonnel,
@@ -940,6 +962,7 @@ const PersonalView = ({
   onAssignSubordinate,
   onAddSubordinate,
   onUpdateDossier,
+  onUpdatePersonMeses,
   isLeadModalOpen,
   setIsLeadModalOpen
 }) => {
@@ -1108,43 +1131,83 @@ const PersonalView = ({
                     );
                   }
 
-                  const renderSubCard = (subId) => {
+                  const renderSubCard = (subId, projectName = null) => {
                     const sub = personnel.find(p => p.id === subId);
                     if (!sub) return null;
+
+                    const project = projectName ? projects.find(p => p.nombre === projectName) : null;
+                    let projectMonths = project ? getMesesProyecto(project.inicio, project.fin) : [];
+                    // Fallback: si el proyecto no tiene fechas, generar 12 meses desde el año actual
+                    if (projectName && projectMonths.length === 0) {
+                      const y = new Date().getFullYear();
+                      projectMonths = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+                    }
+                    const activeMeses = projectName && sub.meses_proyecto ? (sub.meses_proyecto[projectName] || []) : [];
+
+                    const toggleMes = (mes) => {
+                      const next = activeMeses.includes(mes)
+                        ? activeMeses.filter(m => m !== mes)
+                        : [...activeMeses, mes];
+                      const updatedMeses = { ...(sub.meses_proyecto || {}), [projectName]: next };
+                      if (onUpdatePersonMeses) onUpdatePersonMeses(sub.id, updatedMeses);
+                    };
+
                     return (
-                      <div key={subId} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-blue-200 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-bold text-xs uppercase group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                            {sub.nombre.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-navy-800">{sub.nombre}</p>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-[10px] text-slate-400 font-medium">{sub.rol}</p>
-                              {sub.telefono && (
-                                <span className="text-[9px] text-slate-300">• {sub.telefono}</span>
-                              )}
-                              {sub.remuneracion > 0 && (
-                                <span className="text-[9px] text-green-600 font-bold">• S/ {sub.remuneracion.toLocaleString('es-PE')}</span>
-                              )}
+                      <div key={subId} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm group hover:border-blue-200 transition-all">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-bold text-xs uppercase group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors shrink-0">
+                              {sub.nombre.split(' ').map(n => n[0]).join('')}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-navy-800">{sub.nombre}</p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-[10px] text-slate-400 font-medium">{sub.rol}</p>
+                                {sub.telefono && (
+                                  <span className="text-[9px] text-slate-300">• {sub.telefono}</span>
+                                )}
+                                {sub.remuneracion > 0 && (
+                                  <span className="text-[9px] text-green-600 font-bold">• S/ {sub.remuneracion.toLocaleString('es-PE')}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => onEditPersonnel(sub)}
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border-none bg-transparent"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              onClick={() => onAssignSubordinate(lead.id, subId)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border-none bg-transparent"
+                              title="Desvincular"
+                            >
+                              <Plus size={14} className="rotate-45 text-red-400" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => onEditPersonnel(sub)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border-none bg-transparent"
-                          >
-                            <Plus size={14} className="rotate-45" />
-                          </button>
-                          <button
-                            onClick={() => onAssignSubordinate(lead.id, subId)}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border-none bg-transparent"
-                            title="Desvincular"
-                          >
-                            <Plus size={14} className="rotate-45 text-red-500" />
-                          </button>
-                        </div>
+                        {projectName && projectMonths.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-100">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Meses activos en este proyecto</p>
+                            <div className="flex flex-wrap gap-1">
+                              {projectMonths.map(mes => (
+                                <button
+                                  key={mes}
+                                  onClick={() => toggleMes(mes)}
+                                  className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors border-none cursor-pointer ${
+                                    activeMeses.includes(mes)
+                                      ? 'bg-blue-500 text-white'
+                                      : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {formatMesLabel(mes)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   };
@@ -1174,7 +1237,7 @@ const PersonalView = ({
                             </div>
                             {groupSubs.length > 0 ? (
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4 border-l-2 border-blue-100">
-                                {groupSubs.map(renderSubCard)}
+                                {groupSubs.map(subId => renderSubCard(subId, projectName))}
                               </div>
                             ) : (
                               <div className="pl-4 border-l-2 border-slate-100 py-2">
@@ -1242,9 +1305,10 @@ const PersonalView = ({
                   }
 
                   // Vista plana para 0 o 1 proyecto
+                  const singleProject = leadProjects.length === 1 ? leadProjects[0] : null;
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {subIds.map(renderSubCard)}
+                      {subIds.map(subId => renderSubCard(subId, singleProject))}
                     </div>
                   );
                 })()}
@@ -1400,28 +1464,6 @@ const ReportsView = ({ personnel, projects }) => {
       </div>
     </div>
   );
-};
-
-// ── Helpers Materiales ────────────────────────────────────────────────────
-const MESES_LABELS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-const getMesesProyecto = (inicio, fin) => {
-  if (!inicio || !fin) return [];
-  const [sy, sm] = inicio.split('-').map(Number);
-  const [ey, em] = fin.split('-').map(Number);
-  const meses = [];
-  let y = sy, m = sm;
-  while (y < ey || (y === ey && m <= em)) {
-    meses.push(`${y}-${String(m).padStart(2, '0')}`);
-    m++;
-    if (m > 12) { m = 1; y++; }
-  }
-  return meses;
-};
-
-const formatMesLabel = (mesStr) => {
-  const [y, m] = mesStr.split('-');
-  return `${MESES_LABELS[parseInt(m, 10) - 1]} ${y}`;
 };
 
 // ── MaterialesView ────────────────────────────────────────────────────────
@@ -1866,6 +1908,17 @@ function App() {
       console.error("Error al asignar subordinado:", err);
     }
   };
+  const handleUpdatePersonMeses = async (personId, mesesProyecto) => {
+    try {
+      const { error } = await supabase.from('personal').update({ meses_proyecto: mesesProyecto }).eq('id', personId);
+      if (error) throw error;
+      fetchData(true);
+    } catch (err) {
+      console.error("Error al actualizar meses:", err);
+      alert(`Error al guardar meses: ${err.message}`);
+    }
+  };
+
   const handleUpdateDossier = async (projectId, activityIndex, updatedActivity) => {
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
@@ -2003,6 +2056,7 @@ function App() {
             onAddSubordinate={handleCreateSubordinate}
             onUpdateDossier={handleUpdateDossier}
             onAssignSubordinate={handleAssignSubordinate}
+            onUpdatePersonMeses={handleUpdatePersonMeses}
             isLeadModalOpen={isLeadModalOpen}
             setIsLeadModalOpen={setIsLeadModalOpen}
           />
