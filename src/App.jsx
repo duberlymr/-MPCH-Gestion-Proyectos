@@ -1428,13 +1428,22 @@ const MaterialesView = ({ projects, onSave }) => {
   const [newMat, setNewMat] = React.useState({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
   const [editingState, setEditingState] = React.useState(null); // { projectId, matId }
   const [editVal, setEditVal] = React.useState({});
+  // Estado local optimista: muestra datos inmediatamente sin esperar Supabase
+  const [localMats, setLocalMats] = React.useState({});
+
+  // Limpia overrides locales cuando Supabase confirma y actualiza projects
+  React.useEffect(() => { setLocalMats({}); }, [projects]);
+
+  const getMats = (projectId) =>
+    localMats[projectId] !== undefined
+      ? localMats[projectId]
+      : (projects.find(p => p.id === projectId)?.materiales_cronograma || []);
 
   const handleAdd = (projectId, mes) => {
-    if (!newMat.nombre || !newMat.costoUnitario) return;
+    if (!newMat.nombre) return; // solo nombre es requerido
     const qty = parseFloat(newMat.cantidad) || 1;
     const cu = parseFloat(newMat.costoUnitario) || 0;
-    const project = projects.find(p => p.id === projectId);
-    const updated = [...(project?.materiales_cronograma || []), {
+    const updated = [...getMats(projectId), {
       id: Date.now(),
       mes,
       nombre: newMat.nombre,
@@ -1443,25 +1452,29 @@ const MaterialesView = ({ projects, onSave }) => {
       costoUnitario: cu,
       costo: qty * cu
     }];
-    onSave(projectId, updated);
+    // Actualiza UI inmediatamente (optimista)
+    setLocalMats(prev => ({ ...prev, [projectId]: updated }));
     setNewMat({ nombre: '', unidad: 'Und.', cantidad: '1', costoUnitario: '' });
     setAddingState(null);
+    // Guarda en Supabase en segundo plano
+    onSave(projectId, updated);
   };
 
   const handleDelete = (projectId, matId) => {
-    const project = projects.find(p => p.id === projectId);
-    onSave(projectId, (project?.materiales_cronograma || []).filter(m => m.id !== matId));
+    const updated = getMats(projectId).filter(m => m.id !== matId);
+    setLocalMats(prev => ({ ...prev, [projectId]: updated }));
+    onSave(projectId, updated);
   };
 
   const handleSaveEdit = (projectId) => {
-    const project = projects.find(p => p.id === projectId);
     const qty = parseFloat(editVal.cantidad) || 1;
     const cu = parseFloat(editVal.costoUnitario) || 0;
-    const updated = (project?.materiales_cronograma || []).map(m =>
+    const updated = getMats(projectId).map(m =>
       m.id === editingState.matId ? { ...m, ...editVal, cantidad: qty, costoUnitario: cu, costo: qty * cu } : m
     );
-    onSave(projectId, updated);
+    setLocalMats(prev => ({ ...prev, [projectId]: updated }));
     setEditingState(null);
+    onSave(projectId, updated);
   };
 
   return (
@@ -1477,7 +1490,7 @@ const MaterialesView = ({ projects, onSave }) => {
       <div className="space-y-10">
         {projects.map((project) => {
           const meses = getMesesProyecto(project.inicio, project.fin);
-          const materiales = project.materiales_cronograma || [];
+          const materiales = getMats(project.id);
           const totalAsignado = materiales.reduce((s, m) => s + (m.costo || 0), 0);
           const presupuestoMat = project.presupuesto?.materiales || 0;
           const pct = presupuestoMat > 0 ? Math.min((totalAsignado / presupuestoMat) * 100, 100).toFixed(0) : 0;
@@ -1890,6 +1903,7 @@ function App() {
       fetchData(true);
     } catch (err) {
       console.error("Error al guardar materiales:", err);
+      alert(`Error al guardar materiales: ${err.message}\n\nAsegúrese de que la columna "materiales_cronograma" (tipo JSONB) exista en la tabla "proyectos" de Supabase.`);
     }
   };
 
