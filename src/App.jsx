@@ -1047,21 +1047,51 @@ const PersonalView = ({
                             }
                           </select>
 
-                          <div className="flex flex-wrap gap-2">
-                            {(lead.proyectos || []).map((projectName, idx) => (
-                              <div
-                                key={idx}
-                                className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-between group/chip w-full"
-                              >
-                                {projectName}
-                                <button
-                                  onClick={() => onAssignProject(lead.id, projectName)}
-                                  className="text-white/60 hover:text-white ml-2 transition-colors border-none bg-transparent"
-                                >
-                                  <Plus size={12} className="rotate-45" />
-                                </button>
-                              </div>
-                            ))}
+                          <div className="space-y-2">
+                            {(lead.proyectos || []).map((projectName, idx) => {
+                              const proj = projects.find(p => p.nombre === projectName);
+                              let projMonths = proj ? getMesesProyecto(proj.inicio, proj.fin) : [];
+                              if (projMonths.length === 0) {
+                                const y = new Date().getFullYear();
+                                projMonths = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+                              }
+                              const activeMeses = lead.meses_proyecto?.[projectName] || [];
+                              const toggleLeadMes = (mes) => {
+                                const next = activeMeses.includes(mes)
+                                  ? activeMeses.filter(m => m !== mes)
+                                  : [...activeMeses, mes];
+                                if (onUpdatePersonMeses) onUpdatePersonMeses(lead.id, { ...(lead.meses_proyecto || {}), [projectName]: next });
+                              };
+                              return (
+                                <div key={idx} className="bg-blue-700/40 rounded-xl p-2.5 border border-blue-500/30">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[9px] font-bold text-white/90 leading-tight flex-1 mr-2 line-clamp-2">{projectName}</span>
+                                    <button
+                                      onClick={() => onAssignProject(lead.id, projectName)}
+                                      className="text-white/40 hover:text-white transition-colors border-none bg-transparent shrink-0"
+                                    >
+                                      <Plus size={11} className="rotate-45" />
+                                    </button>
+                                  </div>
+                                  <p className="text-[8px] font-bold text-white/30 uppercase tracking-widest mb-1.5">Meses activos</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {projMonths.map(mes => (
+                                      <button
+                                        key={mes}
+                                        onClick={() => toggleLeadMes(mes)}
+                                        className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold transition-colors border-none cursor-pointer ${
+                                          activeMeses.includes(mes)
+                                            ? 'bg-white text-blue-700'
+                                            : 'bg-white/10 text-white/40 hover:bg-white/20 hover:text-white/70'
+                                        }`}
+                                      >
+                                        {formatMesLabel(mes)}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
                             {(!lead.proyectos || lead.proyectos.length === 0) && (
                               <p className="text-[10px] text-white/20 italic px-1">Ningún proyecto asignado</p>
                             )}
